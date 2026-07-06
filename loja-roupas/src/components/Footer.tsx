@@ -1,4 +1,5 @@
 import React from 'react';
+import { Globe, MessageCircle, Mail, Link as LinkIcon, Send } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   return (
@@ -16,12 +17,20 @@ export const Footer: React.FC = () => {
               Criamos peças atemporais pensadas para o guarda-roupa moderno. Minimalismo, qualidade e caimento perfeitos em cada costura.
             </p>
 
-            {/* Social Icons Placeholders */}
-            <div className="flex space-x-3">
-              <span className="w-8 h-8 flex items-center justify-center border border-dashed border-gray-medium/50 rounded-sm text-[9px] font-mono text-gray-medium select-none" title="Facebook">FB</span>
-              <span className="w-8 h-8 flex items-center justify-center border border-dashed border-gray-medium/50 rounded-sm text-[9px] font-mono text-gray-medium select-none" title="Instagram">IG</span>
-              <span className="w-8 h-8 flex items-center justify-center border border-dashed border-gray-medium/50 rounded-sm text-[9px] font-mono text-gray-medium select-none" title="Pinterest">PIN</span>
-              <span className="w-8 h-8 flex items-center justify-center border border-dashed border-gray-medium/50 rounded-sm text-[9px] font-mono text-gray-medium select-none" title="TikTok">TT</span>
+            {/* Social Icons */}
+            <div className="flex space-x-3 text-gray-medium">
+              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center border border-gray-light hover:border-primary hover:text-primary rounded-sm transition-colors" title="Website">
+                <Globe className="w-4 h-4" />
+              </a>
+              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center border border-gray-light hover:border-primary hover:text-primary rounded-sm transition-colors" title="Social Chat">
+                <MessageCircle className="w-4 h-4" />
+              </a>
+              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center border border-gray-light hover:border-primary hover:text-primary rounded-sm transition-colors" title="E-mail">
+                <Mail className="w-4 h-4" />
+              </a>
+              <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center border border-gray-light hover:border-primary hover:text-primary rounded-sm transition-colors" title="Links">
+                <LinkIcon className="w-4 h-4" />
+              </a>
             </div>
           </div>
 
@@ -72,9 +81,9 @@ export const Footer: React.FC = () => {
               />
               <button 
                 type="submit"
-                className="bg-primary hover:bg-secondary text-white hover:text-primary transition-all duration-300 px-4 font-mono text-xs flex items-center justify-center cursor-pointer select-none"
+                className="bg-primary hover:bg-secondary text-white hover:text-primary transition-all duration-300 px-4 flex items-center justify-center cursor-pointer select-none"
               >
-                [{'>'}]
+                <Send className="w-3.5 h-3.5" />
               </button>
             </form>
           </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowRight } from 'lucide-react';
 
 interface CategoryCardProps {
   image: string;
@@ -44,9 +45,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
             <span className="font-mono text-xs font-semibold tracking-wide text-secondary uppercase">
               {actionText}
             </span>
-            <span className="text-[10px] border border-dashed border-secondary/50 px-1 rounded-sm text-secondary">
-              ARR
-            </span>
+            <ArrowRight className="w-4 h-4 text-secondary group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { Hero } from '../../components/Hero';
 import { SectionTitle } from '../../components/SectionTitle';
 import { CategoryCard } from '../../components/CategoryCard';
@@ -65,7 +66,7 @@ export const Home: React.FC<HomeProps> = ({ onAddToCart }) => {
           rightElement={
             <Link to="/produtos" className="flex items-center space-x-2 text-xs font-mono font-bold tracking-wider text-primary hover:text-secondary transition-colors uppercase group">
               <span>View All Categories</span>
-              <span className="text-[10px] border border-dashed border-primary group-hover:border-secondary px-1 rounded-sm">ARR</span>
+              <ArrowRight className="w-4 h-4 text-primary group-hover:text-secondary group-hover:translate-x-0.5 transition-all" />
             </Link>
           }
         />

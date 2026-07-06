@@ -1,4 +1,5 @@
 import React from 'react';
+import { Plus } from 'lucide-react';
 
 interface ProductCardProps {
   id: string | number;
@@ -56,13 +57,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             Adicionar ao Carrinho
           </button>
           
-          {/* Icon Placeholder beside button */}
-          <div 
-            title="Futuro Ícone"
-            className="w-10 flex items-center justify-center border border-gray-light bg-gray-light/30 text-gray-medium text-[9px] font-mono select-none"
+          {/* Plus icon beside button */}
+          <button 
+            onClick={onAddToCart}
+            title="Adicionar ao Carrinho"
+            className="w-10 flex items-center justify-center border border-gray-light bg-gray-light/30 hover:bg-secondary hover:border-secondary text-gray-medium hover:text-primary transition-all duration-200 cursor-pointer active:scale-[0.98]"
           >
-            [+]
-          </div>
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>
