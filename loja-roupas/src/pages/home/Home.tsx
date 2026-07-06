@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Hero } from '../../components/Hero';
 import { SectionTitle } from '../../components/SectionTitle';
 import { CategoryCard } from '../../components/CategoryCard';
@@ -62,10 +63,10 @@ export const Home: React.FC<HomeProps> = ({ onAddToCart }) => {
           subtitle="EXPLORE THE CAMPAIGN"
           underline
           rightElement={
-            <a href="#" className="flex items-center space-x-2 text-xs font-mono font-bold tracking-wider text-primary hover:text-secondary transition-colors uppercase group">
+            <Link to="/produtos" className="flex items-center space-x-2 text-xs font-mono font-bold tracking-wider text-primary hover:text-secondary transition-colors uppercase group">
               <span>View All Categories</span>
               <span className="text-[10px] border border-dashed border-primary group-hover:border-secondary px-1 rounded-sm">ARR</span>
-            </a>
+            </Link>
           }
         />
 

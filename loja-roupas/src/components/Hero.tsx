@@ -1,4 +1,6 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { Button } from './Button';
 import heroImg from '../assets/hero_fashion.jpg';
 
@@ -43,10 +45,12 @@ export const Hero: React.FC = () => {
 
           {/* Call-to-action button */}
           <div className="animate-fade-in-up delay-300">
-            <Button variant="primary" className="flex items-center space-x-2 px-8 py-4 text-xs font-bold font-mono tracking-widest">
-              <span>COMPRAR AGORA</span>
-              <span className="text-[10px] border border-dashed border-primary/50 px-1 rounded-sm">ARR</span>
-            </Button>
+            <Link to="/produtos">
+              <Button variant="primary" className="flex items-center space-x-2 px-8 py-4 text-xs font-bold font-mono tracking-widest group/btn">
+                <span>COMPRAR AGORA</span>
+                <ArrowRight className="w-4 h-4 text-primary group-hover/btn:translate-x-0.5 transition-transform" />
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
