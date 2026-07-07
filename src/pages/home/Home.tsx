@@ -1,11 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { Hero } from '../../components/Hero';
-import { SectionTitle } from '../../components/SectionTitle';
-import { CategoryCard } from '../../components/CategoryCard';
-import { ProductCard } from '../../components/ProductCard';
-import { PromotionalBanner } from '../../components/PromotionalBanner';
+import { supabase } from '../../lib/supabase';
 
 // Import local category assets
 import catSuit from '../../assets/cat_suit.jpg';
@@ -13,140 +10,328 @@ import catOutdoor from '../../assets/cat_outdoor.jpg';
 import catBag from '../../assets/cat_bag.jpg';
 import catKnitwear from '../../assets/cat_knitwear.jpg';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Destaque {
+  id: string;
+  nome: string;
+  preco: number;
+  imagem: string;
+  descricao: string;
+}
+
 interface HomeProps {
   onAddToCart: () => void;
 }
 
-export const Home: React.FC<HomeProps> = ({ onAddToCart }) => {
-  // Weekly arrivals high-fidelity product mockup data
-  const products = [
-    {
-      id: '1',
-      name: 'Silk Slip Dress',
-      category: 'Vestidos',
-      price: 'R$ 389,00',
-      image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=600&h=600&q=80',
-    },
-    {
-      id: '2',
-      name: 'Structured Blazer',
-      category: 'Alfaiataria',
-      price: 'R$ 679,00',
-      image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=600&h=600&q=80',
-    },
-    {
-      id: '3',
-      name: 'Fluid Trousers',
-      category: 'Calças',
-      price: 'R$ 429,00',
-      image: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&w=600&h=600&q=80',
-    },
-    {
-      id: '4',
-      name: 'Boxy Light Tee',
-      category: 'Camisetas',
-      price: 'R$ 159,00',
-      image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=600&h=600&q=80',
-    },
-  ];
+// ─── Carousel Card ────────────────────────────────────────────────────────────
+const FeaturedCard: React.FC<{ produto: Destaque }> = ({ produto }) => (
+  <Link
+    to={`/produtos/${produto.id}`}
+    className="group flex-shrink-0 w-[260px] sm:w-[300px] md:w-[340px] flex flex-col"
+  >
+    {/* Image */}
+    <div className="relative aspect-[3/4] overflow-hidden bg-gray-light rounded-sm">
+      <img
+        src={produto.imagem || 'https://placehold.co/340x453/f5f5f5/999?text=Sem+Imagem'}
+        alt={produto.nome}
+        className="w-full h-full object-cover object-center group-hover:scale-[1.04] transition-transform duration-700 ease-out"
+        loading="lazy"
+      />
+      {/* Hover overlay */}
+      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-5">
+        <span className="font-mono text-[9px] font-bold tracking-[0.2em] uppercase text-white bg-black/60 px-3 py-1.5 backdrop-blur-sm">
+          Ver Produto →
+        </span>
+      </div>
+      {/* Destaque badge */}
+      <div className="absolute top-3 left-3 bg-secondary text-primary font-mono text-[8px] font-black tracking-widest uppercase px-2 py-1">
+        ✦ DESTAQUE
+      </div>
+    </div>
+
+    {/* Info */}
+    <div className="mt-3.5 space-y-1">
+      <h3 className="font-sans text-sm font-bold text-primary uppercase tracking-tight truncate group-hover:text-secondary transition-colors duration-200">
+        {produto.nome}
+      </h3>
+      {produto.descricao && (
+        <p className="font-sans text-[11px] text-gray-medium leading-snug line-clamp-2">
+          {produto.descricao}
+        </p>
+      )}
+      <p className="font-mono text-sm font-bold text-primary pt-1">
+        R$ {produto.preco.toFixed(2).replace('.', ',')}
+      </p>
+    </div>
+  </Link>
+);
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export const Home: React.FC<HomeProps> = () => {
+  const [destaques, setDestaques] = useState<Destaque[]>([]);
+  const [loadingDestaques, setLoadingDestaques] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Fetch featured products ───────────────────────────────────────────────
+  useEffect(() => {
+    const fetchDestaques = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('id, nome, preco, imagem, descricao')
+          .eq('destaque', true)
+          .eq('ativo', true)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setDestaques(data || []);
+      } catch (err) {
+        console.error('Erro ao carregar destaques:', err);
+      } finally {
+        setLoadingDestaques(false);
+      }
+    };
+
+    fetchDestaques();
+  }, []);
+
+  // ── Carousel: visible cards count ────────────────────────────────────────
+  const getVisibleCount = () => {
+    if (typeof window === 'undefined') return 3;
+    if (window.innerWidth >= 1024) return 3;
+    if (window.innerWidth >= 640) return 2;
+    return 1;
+  };
+
+  const [visibleCount, setVisibleCount] = useState(getVisibleCount);
+
+  useEffect(() => {
+    const onResize = () => setVisibleCount(getVisibleCount());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const maxIndex = Math.max(0, destaques.length - visibleCount);
+
+  // ── Auto-play ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (destaques.length <= visibleCount) return;
+    autoRef.current = setInterval(() => {
+      setCurrentIndex((prev) => (prev >= maxIndex ? 0 : prev + 1));
+    }, 4000);
+    return () => { if (autoRef.current) clearInterval(autoRef.current); };
+  }, [destaques.length, visibleCount, maxIndex]);
+
+  const pauseAuto = () => { if (autoRef.current) clearInterval(autoRef.current); };
+
+  const prev = () => {
+    pauseAuto();
+    setCurrentIndex((i) => Math.max(0, i - 1));
+  };
+
+  const next = () => {
+    pauseAuto();
+    setCurrentIndex((i) => Math.min(maxIndex, i + 1));
+  };
+
+  // ── Card width calc (must match CSS) ─────────────────────────────────────
+  // card width + gap: sm=300+24, md=340+24, default=260+16
+  const getCardWidthPx = () => {
+    if (typeof window === 'undefined') return 324;
+    if (window.innerWidth >= 768) return 364; // 340 + 24
+    if (window.innerWidth >= 640) return 324; // 300 + 24
+    return 276; // 260 + 16
+  };
+
+  const translateX = currentIndex * getCardWidthPx();
 
   return (
     <main className="flex-grow">
-      
+
       {/* 1. Hero Banner */}
       <Hero />
 
-      {/* 2. Featured Collections (Categorias Grid) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
-        {/* Section title with right side action link */}
-        <SectionTitle
-          title="Featured Collections"
-          subtitle="EXPLORE THE CAMPAIGN"
-          underline
-          rightElement={
-            <Link to="/produtos" className="flex items-center space-x-2 text-xs font-mono font-bold tracking-wider text-primary hover:text-secondary transition-colors uppercase group">
-              <span>View All Categories</span>
-              <ArrowRight className="w-4 h-4 text-primary group-hover:text-secondary group-hover:translate-x-0.5 transition-all" />
-            </Link>
-          }
-        />
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* 2. DESTAQUES CAROUSEL                                               */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <section className="py-16 md:py-24 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Categories Complex Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Large Column (Tall Card) */}
-          <div className="lg:col-span-1">
-            <CategoryCard
-              image={catSuit}
-              title="Textured Essentials"
-              subtitle="NEW IN STORE"
-              actionText="VER CAMPANHA"
-              aspectClass="h-[400px] lg:h-[624px]"
-            />
-          </div>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
+            <div>
+              <span className="font-mono text-[10px] font-bold tracking-[0.25em] text-secondary uppercase block mb-2">
+                // PRODUTOS EM DESTAQUE
+              </span>
+              <h2 className="font-sans text-3xl md:text-4xl font-black text-primary uppercase tracking-tight">
+                Mais Procurados
+              </h2>
+              <div className="w-10 h-[3px] bg-secondary mt-3" />
+            </div>
 
-          {/* Right Column (Landscape + 2 Squares) */}
-          <div className="lg:col-span-1 flex flex-col gap-6">
-            {/* Top landscape card */}
-            <CategoryCard
-              image={catOutdoor}
-              title="Urban Activewear"
-              subtitle="STREETCORE"
-              actionText="EXPLORAR"
-              aspectClass="h-[200px] lg:h-[299px]"
-            />
+            <div className="flex items-center gap-3">
+              {/* Prev / Next buttons */}
+              {destaques.length > visibleCount && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={prev}
+                    disabled={currentIndex === 0}
+                    className="w-9 h-9 flex items-center justify-center border border-gray-light hover:border-primary text-gray-medium hover:text-primary transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed rounded-sm"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    onClick={next}
+                    disabled={currentIndex >= maxIndex}
+                    className="w-9 h-9 flex items-center justify-center border border-gray-light hover:border-primary text-gray-medium hover:text-primary transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed rounded-sm"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
 
-            {/* Bottom row containing two square cards */}
-            <div className="grid grid-cols-2 gap-6">
-              <CategoryCard
-                image={catBag}
-                title="Minimalist Leather"
-                subtitle="ACCESSORIES"
-                actionText="VER BOLSAS"
-                aspectClass="h-[176px] lg:h-[299px]"
-              />
-              <CategoryCard
-                image={catKnitwear}
-                title="Cozy Knits"
-                subtitle="AUTUMN EDIT"
-                actionText="VER TRICÔS"
-                aspectClass="h-[176px] lg:h-[299px]"
-              />
+              <Link
+                to="/produtos"
+                className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-gray-medium hover:text-primary transition-colors uppercase tracking-widest group"
+              >
+                Ver todos
+                <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+              </Link>
             </div>
           </div>
+
+          {/* Carousel Track */}
+          {loadingDestaques ? (
+            <div className="flex items-center justify-center h-56 gap-3">
+              <RefreshCw size={22} className="animate-spin text-gray-medium" />
+              <span className="font-mono text-[10px] text-gray-medium uppercase tracking-widest">
+                Carregando destaques...
+              </span>
+            </div>
+          ) : destaques.length === 0 ? (
+            <div className="text-center py-16 border border-dashed border-gray-light rounded-sm">
+              <p className="font-mono text-xs text-gray-medium uppercase tracking-widest">
+                Nenhum produto em destaque cadastrado.
+              </p>
+            </div>
+          ) : (
+            <div className="relative overflow-hidden">
+              <div
+                ref={trackRef}
+                className="flex gap-4 sm:gap-6 transition-transform duration-500 ease-in-out"
+                style={{ transform: `translateX(-${translateX}px)` }}
+              >
+                {destaques.map((p) => (
+                  <FeaturedCard key={p.id} produto={p} />
+                ))}
+              </div>
+
+              {/* Dot indicators */}
+              {destaques.length > visibleCount && (
+                <div className="flex items-center justify-center gap-1.5 mt-8">
+                  {Array.from({ length: maxIndex + 1 }).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { pauseAuto(); setCurrentIndex(i); }}
+                      className={`transition-all duration-300 rounded-full cursor-pointer ${
+                        i === currentIndex
+                          ? 'w-6 h-1.5 bg-primary'
+                          : 'w-1.5 h-1.5 bg-gray-light hover:bg-gray-medium/50'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
-      {/* 3. Promotional Banner */}
-      <PromotionalBanner />
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* 3. Nossos Produtos Grid                                             */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24">
 
-      {/* 4. Products Grid Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
-        {/* Section title */}
-        <div className="text-center mb-12">
-          <span className="font-mono text-xs font-semibold tracking-[0.2em] text-secondary uppercase mb-2 block">
-            // NEW ITEMS
-          </span>
-          <h2 className="font-sans text-3xl md:text-4xl font-extrabold tracking-tight text-primary uppercase">
-            Weekly Arrivals
-          </h2>
-          <div className="w-12 h-1 bg-secondary mx-auto mt-3"></div>
+        {/* Header */}
+        <div className="flex items-end justify-between mb-6 border-b border-gray-200 pb-4">
+          <div>
+            <h2 className="font-sans text-2xl sm:text-3xl font-black text-primary tracking-tight">
+              Nossos produtos
+            </h2>
+            <div className="w-8 h-[3px] bg-primary mt-2" />
+          </div>
+          <Link
+            to="/produtos"
+            className="font-mono text-[10px] font-bold tracking-[0.2em] text-secondary hover:text-primary uppercase transition-colors flex items-center gap-1 group"
+          >
+            Ver todos os produtos
+            <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+          </Link>
         </div>
 
-        {/* Responsive grid for 4 items */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <ProductCard
-              key={product.id}
-              id={product.id}
-              name={product.name}
-              category={product.category}
-              price={product.price}
-              image={product.image}
-              onAddToCart={onAddToCart}
+        {/* Grid Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Left: large card */}
+          <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[480px] lg:h-[600px]">
+            <img
+              src={catSuit}
+              alt="Coleção Principal"
+              className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
             />
-          ))}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            <div className="absolute bottom-0 left-0 p-6 space-y-3">
+              <span className="block font-mono text-[9px] font-bold tracking-[0.3em] text-secondary uppercase">
+                Camisas
+              </span>
+              <Link to="/produtos">
+                <button className="bg-white text-primary font-mono text-xs font-bold px-5 py-2.5 rounded hover:bg-secondary transition-colors tracking-wide cursor-pointer">
+                  Compre agora
+                </button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Right: stacked smaller cards */}
+          <div className="flex flex-col gap-4">
+
+            {/* Top right: wide card */}
+            <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[200px] lg:h-[240px]">
+              <img
+                src={catOutdoor}
+                alt="Urban Activewear"
+                className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+            </div>
+
+            {/* Bottom right: two side-by-side cards */}
+            <div className="grid grid-cols-2 gap-4 flex-1">
+              <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
+                <img
+                  src={catBag}
+                  alt="Acessórios"
+                  className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+              </div>
+              <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
+                <img
+                  src={catKnitwear}
+                  alt="Tricôs"
+                  className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+              </div>
+            </div>
+
+          </div>
         </div>
       </section>
+
+
 
     </main>
   );

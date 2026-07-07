@@ -174,6 +174,7 @@ export const Contact: React.FC = () => {
   if (lojaInfo?.endereco && lojaInfo.endereco.trim()) {
     contactChannels.push({
       title: 'Endereço',
+      href: 'https://maps.app.goo.gl/ho6MCFtYTDJbdXjt9',
       detail: lojaInfo.endereco,
       icon: (
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

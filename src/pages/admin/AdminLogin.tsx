@@ -37,11 +37,9 @@ export const AdminLogin: React.FC = () => {
       <div className="flex-grow flex flex-col items-center justify-center px-4">
 
         {/* Cabeçalho da marca */}
-        <div className="text-center mb-12">
-          <h1 className="font-sans text-4xl sm:text-5xl font-black tracking-[0.15em] text-primary uppercase">
-            VOGUE &amp; VESTURE
-          </h1>
-          <p className="mt-2 font-mono text-[11px] tracking-[0.35em] text-gray-medium uppercase">
+        <div className="text-center mb-8 flex flex-col items-center">
+          <img src="/logo-black.png" alt="Canhoto Surf Outlet" className="h-28 w-auto object-contain mb-4" />
+          <p className="font-mono text-[11px] tracking-[0.35em] text-gray-medium uppercase">
             ADMINISTRAÇÃO INTERNA
           </p>
         </div>

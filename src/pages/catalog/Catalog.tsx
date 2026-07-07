@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Badge } from '../../components/Badge';
 import { RefreshCw, Filter, X, Check, Search } from 'lucide-react';
@@ -103,7 +104,7 @@ export const Catalog: React.FC = () => {
           name,
           category: getCategoryFromName(name),
           price: parseFloat(p.preco) || 0,
-          image: p.imagem || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=600&h=800&q=80',
+          image: p.imagem || 'https://www2.camara.leg.br/atividade-legislativa/comissoes/comissoes-permanentes/cindra/imagens/sem.jpg.gif/image_preview',
           tag: p.destaque ? 'DESTAQUE' : undefined,
           sizes: sizesMap[p.id] || [],
           color: getColorFromNameOrDesc(name, desc),
@@ -330,7 +331,11 @@ export const Catalog: React.FC = () => {
           ) : displayedProducts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {displayedProducts.map((p) => (
-                <div key={p.id} className="group flex flex-col h-full bg-white relative overflow-hidden">
+                <Link
+                  key={p.id}
+                  to={`/produtos/${p.id}`}
+                  className="group flex flex-col h-full bg-white relative overflow-hidden"
+                >
                   {/* Card Image */}
                   <div className="relative aspect-[3/4] overflow-hidden bg-gray-light border border-gray-light/35 rounded-sm">
                     <img
@@ -349,6 +354,13 @@ export const Catalog: React.FC = () => {
                         {p.tag}
                       </Badge>
                     )}
+
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <span className="font-mono text-[9px] font-bold tracking-widest uppercase text-primary bg-white/90 px-3 py-1.5">
+                        Ver Detalhes
+                      </span>
+                    </div>
                   </div>
 
                   {/* Details Block */}
@@ -369,7 +381,7 @@ export const Catalog: React.FC = () => {
                       )}
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           ) : (

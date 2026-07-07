@@ -17,6 +17,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { uploadToCloudinary, deleteFromCloudinary } from '../../lib/cloudinary';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const AVAILABLE_SIZES = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'Único'];
@@ -47,12 +48,10 @@ const AdminSidebar: React.FC<{ isOpen: boolean; onClose: () => void; activeTab: 
       <div className="space-y-8">
         {/* Brand */}
         <div>
-          <h2 className="font-sans text-sm font-black tracking-widest text-primary uppercase">
-            Boutique Admin
-          </h2>
-          <p className="font-mono text-[9px] text-gray-medium uppercase tracking-wider mt-0.5">
-            Gerente da Loja
-          </p>
+          <div className="flex flex-col items-start gap-2">
+            <img src="/logo-black.png" alt="Canhoto Surf" className="h-10 w-auto object-contain" />
+            <span className="font-mono text-[9px] text-gray-medium uppercase tracking-wider">Painel Administrativo</span>
+          </div>
         </div>
 
         {/* Navigation */}
@@ -185,6 +184,7 @@ export const AddProduct: React.FC = () => {
 
   // ── Image state ────────────────────────────────────────────────────────────
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -215,6 +215,7 @@ export const AddProduct: React.FC = () => {
           setAtivo(!!prodData.ativo);
           if (prodData.imagem) {
             setPreviewUrl(prodData.imagem);
+            setOriginalImageUrl(prodData.imagem);
           }
         }
 
@@ -278,23 +279,6 @@ export const AddProduct: React.FC = () => {
     if (e.target.files?.[0]) processFile(e.target.files[0]);
   };
 
-  // ── Upload to Supabase Storage ────────────────────────────────────────────
-  const uploadImage = async (file: File): Promise<string | null> => {
-    const ext = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-    const { error } = await supabase.storage
-      .from('product-images')
-      .upload(fileName, file, { cacheControl: '3600', upsert: false });
-
-    if (error) {
-      console.warn('Image upload skipped:', error.message);
-      return null;
-    }
-
-    return supabase.storage.from('product-images').getPublicUrl(fileName).data.publicUrl;
-  };
-
   // ── Save handler ──────────────────────────────────────────────────────────
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,10 +292,19 @@ export const AddProduct: React.FC = () => {
     setToast(null);
 
     try {
-      // 1. Upload image (optional)
+      // 1. Upload/Replace image (optional)
       let imagemUrl: string | null = previewUrl; // Mantém a imagem atual por padrão
       if (imageFile) {
-        imagemUrl = await uploadImage(imageFile);
+        // Se já existia uma imagem antiga cadastrada, exclui ela do Cloudinary
+        if (originalImageUrl) {
+          try {
+            await deleteFromCloudinary(originalImageUrl);
+          } catch (delErr) {
+            console.error('Erro ao deletar imagem antiga do Cloudinary:', delErr);
+          }
+        }
+        // Faz o upload da nova imagem
+        imagemUrl = await uploadToCloudinary(imageFile);
       }
 
       if (id) {

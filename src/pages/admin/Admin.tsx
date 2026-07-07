@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { deleteFromCloudinary } from '../../lib/cloudinary';
 import {
   LayoutDashboard,
   Package,
@@ -146,6 +147,16 @@ export const Admin: React.FC = () => {
     if (!confirm('Deseja remover este produto? Esta ação não pode ser desfeita.')) return;
     setDeletingId(id);
     try {
+      // Exclui a imagem do Cloudinary se ela existir
+      const productToDelete = produtos.find((p) => p.id === id);
+      if (productToDelete?.imagem) {
+        try {
+          await deleteFromCloudinary(productToDelete.imagem);
+        } catch (cloudinaryErr) {
+          console.error('Erro ao deletar imagem do Cloudinary:', cloudinaryErr);
+        }
+      }
+
       // Delete estoque entries first (FK constraint)
       await supabase.from('estoque').delete().eq('produto_id', id);
       const { error } = await supabase.from('produtos').delete().eq('id', id);
@@ -304,9 +315,10 @@ export const Admin: React.FC = () => {
         <div className="space-y-8">
           {/* Brand */}
           <div>
-            <h2 className="font-sans text-base font-black tracking-widest text-primary uppercase">
-              Boutique Admin
-            </h2>
+            <div className="flex flex-col items-start gap-2">
+              <img src="/logo-black.png" alt="Canhoto Surf" className="h-10 w-auto object-contain" />
+              <span className="font-mono text-[9px] text-gray-medium uppercase tracking-wider">Painel Administrativo</span>
+            </div>
             <div className="flex items-center space-x-3 mt-5 border-b border-gray-light pb-4">
               <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-mono font-bold text-primary text-sm">
                 AP
@@ -842,7 +854,7 @@ export const Admin: React.FC = () => {
                 <input
                   id="cfg-instagram"
                   type="text"
-                  placeholder="@vogueandbeyond"
+                  placeholder="@canhotosurf"
                   value={instagram}
                   onChange={(e) => setInstagram(e.target.value)}
                   className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
@@ -855,7 +867,7 @@ export const Admin: React.FC = () => {
                 <input
                   id="cfg-email"
                   type="email"
-                  placeholder="contato@vogueandbeyond.com"
+                  placeholder="contato@canhotosurf.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
