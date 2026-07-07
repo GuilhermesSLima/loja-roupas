@@ -16,7 +16,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         <div className="flex flex-col items-center gap-4">
           <div className="w-6 h-6 border-2 border-gray-light border-t-primary rounded-full animate-spin" />
           <p className="font-mono text-[10px] text-gray-medium uppercase tracking-widest">
-            Verifying Access...
+            Verificando acesso...
           </p>
         </div>
       </div>

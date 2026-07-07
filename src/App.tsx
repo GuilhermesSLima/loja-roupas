@@ -53,6 +53,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/produtos/editar/:id"
+          element={
+            <ProtectedRoute>
+              <AddProduct />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
 
       {/* Store Footer – hidden on admin paths */}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { Search, User, ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import { Badge } from './Badge';
 
 interface NavbarProps {
@@ -58,28 +58,9 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
           {/* Action Icons & Search Placeholder */}
           <div className="flex items-center space-x-6">
             
-            {/* Search Bar Placeholder */}
-             <div className="relative hidden lg:flex items-center">
-               <input 
-                 type="text" 
-                 placeholder="Pesquisar..." 
-                 disabled 
-                 className="w-48 bg-gray-light text-xs font-mono pl-4 pr-10 py-2 border border-transparent rounded-none focus:outline-none cursor-not-allowed opacity-75 placeholder:text-gray-medium"
-               />
-               <Search className="absolute right-3 w-4 h-4 text-gray-medium" />
-             </div>
-
             {/* Icons placeholders */}
             <div className="flex items-center space-x-4">
-               {/* User profile */}
-               <button 
-                 title="Perfil" 
-                 disabled 
-                 className="w-8 h-8 flex flex-col items-center justify-center border border-gray-light hover:border-primary rounded-sm cursor-not-allowed opacity-75 group transition-colors duration-200"
-               >
-                 <User className="w-4 h-4 text-gray-medium group-hover:text-primary" />
-               </button>
- 
+  
                {/* Cart Button */}
                <button 
                  title="Carrinho" 

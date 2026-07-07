@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useNavigate, Link, useParams, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -11,7 +11,6 @@ import {
   Menu,
   CheckCircle,
   AlertCircle,
-  Plus,
   Trash2,
   Star,
   Eye,
@@ -29,7 +28,7 @@ interface EstoqueEntry {
 }
 
 // ─── Shared Sidebar ───────────────────────────────────────────────────────────
-const AdminSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+const AdminSidebar: React.FC<{ isOpen: boolean; onClose: () => void; activeTab: string }> = ({ isOpen, onClose, activeTab }) => {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -52,37 +51,49 @@ const AdminSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOp
             Boutique Admin
           </h2>
           <p className="font-mono text-[9px] text-gray-medium uppercase tracking-wider mt-0.5">
-            Store Manager
+            Gerente da Loja
           </p>
         </div>
 
         {/* Navigation */}
         <nav className="space-y-1">
           <Link
-            to="/admin"
+            to="/admin?tab=dashboard"
             onClick={onClose}
-            className="w-full flex items-center space-x-3 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider text-gray-medium hover:bg-gray-light/50 hover:text-primary transition-all duration-200"
+            className={`w-full flex items-center space-x-3 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider transition-all duration-200 ${
+              activeTab === 'dashboard'
+                ? 'bg-gray-light text-primary border-l-4 border-secondary'
+                : 'text-gray-medium hover:bg-gray-light/50 hover:text-primary border-l-4 border-transparent'
+            }`}
           >
             <LayoutDashboard size={16} />
-            <span>Dashboard</span>
+            <span>Painel</span>
           </Link>
 
           <Link
-            to="/admin"
+            to="/admin?tab=estoque"
             onClick={onClose}
-            className="w-full flex items-center space-x-3 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider bg-gray-light text-primary border-l-4 border-secondary transition-all duration-200"
+            className={`w-full flex items-center space-x-3 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider transition-all duration-200 ${
+              activeTab === 'estoque'
+                ? 'bg-gray-light text-primary border-l-4 border-secondary'
+                : 'text-gray-medium hover:bg-gray-light/50 hover:text-primary border-l-4 border-transparent'
+            }`}
           >
             <Package size={16} />
-            <span>Stock Control</span>
+            <span>Controle de Estoque</span>
           </Link>
 
           <Link
-            to="/admin"
+            to="/admin?tab=configuracoes"
             onClick={onClose}
-            className="w-full flex items-center space-x-3 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider text-gray-medium hover:bg-gray-light/50 hover:text-primary transition-all duration-200"
+            className={`w-full flex items-center space-x-3 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider transition-all duration-200 ${
+              activeTab === 'configuracoes'
+                ? 'bg-gray-light text-primary border-l-4 border-secondary'
+                : 'text-gray-medium hover:bg-gray-light/50 hover:text-primary border-l-4 border-transparent'
+            }`}
           >
             <Settings size={16} />
-            <span>Settings</span>
+            <span>Configurações</span>
           </Link>
         </nav>
       </div>
@@ -95,11 +106,11 @@ const AdminSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOp
           </div>
           <div>
             <p className="text-xs font-bold text-primary font-mono uppercase tracking-wide">
-              Admin Profile
+              Perfil Admin
             </p>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-              <span className="text-[9px] text-gray-medium font-mono uppercase">Active Now</span>
+              <span className="text-[9px] text-gray-medium font-mono uppercase">Ativo Agora</span>
             </div>
           </div>
         </div>
@@ -109,7 +120,7 @@ const AdminSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOp
           className="w-full flex items-center space-x-2 py-2 text-xs font-mono font-bold uppercase tracking-widest text-gray-medium hover:text-red-600 transition-colors cursor-pointer"
         >
           <LogOut size={14} />
-          <span>Logout</span>
+          <span>Sair</span>
         </button>
       </div>
     </aside>
@@ -156,6 +167,10 @@ const Toggle: React.FC<{
 // ─── Main Component ────────────────────────────────────────────────────────────
 export const AddProduct: React.FC = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const fromTab = location.state?.from || 'dashboard';
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Form state (matches `produtos` table) ─────────────────────────────────
@@ -177,6 +192,55 @@ export const AddProduct: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // ── Load Product Data for Editing ─────────────────────────────────────────
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchProductData = async () => {
+      try {
+        const { data: prodData, error: prodError } = await supabase
+          .from('produtos')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (prodError) throw prodError;
+
+        if (prodData) {
+          setNome(prodData.nome || '');
+          setDescricao(prodData.descricao || '');
+          setPreco(prodData.preco?.toString() || '');
+          setDestaque(!!prodData.destaque);
+          setAtivo(!!prodData.ativo);
+          if (prodData.imagem) {
+            setPreviewUrl(prodData.imagem);
+          }
+        }
+
+        const { data: estData, error: estError } = await supabase
+          .from('estoque')
+          .select('tamanho, quantidade')
+          .eq('produto_id', id);
+
+        if (estError) throw estError;
+
+        if (estData) {
+          setEstoqueEntries(
+            estData.map((item) => ({
+              tamanho: item.tamanho,
+              quantidade: item.quantidade,
+            }))
+          );
+        }
+      } catch (err: any) {
+        console.error('Erro ao carregar dados do produto:', err);
+        setToast({ type: 'error', message: 'Erro ao carregar dados do produto para edição.' });
+      }
+    };
+
+    fetchProductData();
+  }, [id]);
 
   // ── Estoque helpers ───────────────────────────────────────────────────────
   const addTamanho = (tamanho: string) => {
@@ -245,41 +309,80 @@ export const AddProduct: React.FC = () => {
 
     try {
       // 1. Upload image (optional)
-      let imagemUrl: string | null = null;
+      let imagemUrl: string | null = previewUrl; // Mantém a imagem atual por padrão
       if (imageFile) {
         imagemUrl = await uploadImage(imageFile);
       }
 
-      // 2. Insert into `produtos`
-      const { data: produto, error: produtoError } = await supabase
-        .from('produtos')
-        .insert({
-          nome: nome.trim(),
-          descricao: descricao.trim() || null,
-          preco: parseFloat(preco) || 0,
-          imagem: imagemUrl,
-          destaque,
-          ativo,
-        })
-        .select('id')
-        .single();
+      if (id) {
+        // 2. Update `produtos`
+        const { error: produtoError } = await supabase
+          .from('produtos')
+          .update({
+            nome: nome.trim(),
+            descricao: descricao.trim() || null,
+            preco: parseFloat(preco) || 0,
+            imagem: imagemUrl,
+            destaque,
+            ativo,
+          })
+          .eq('id', id);
 
-      if (produtoError) throw produtoError;
+        if (produtoError) throw produtoError;
 
-      // 3. Insert each tamanho into `estoque`
-      if (estoqueEntries.length > 0 && produto?.id) {
-        const rows = estoqueEntries.map((entry) => ({
-          produto_id: produto.id,
-          tamanho: entry.tamanho,
-          quantidade: entry.quantidade,
-        }));
+        // 3. Update `estoque`: Delete existing and insert new
+        const { error: deleteEstoqueError } = await supabase
+          .from('estoque')
+          .delete()
+          .eq('produto_id', id);
 
-        const { error: estoqueError } = await supabase.from('estoque').insert(rows);
-        if (estoqueError) throw estoqueError;
+        if (deleteEstoqueError) throw deleteEstoqueError;
+
+        if (estoqueEntries.length > 0) {
+          const rows = estoqueEntries.map((entry) => ({
+            produto_id: id,
+            tamanho: entry.tamanho,
+            quantidade: entry.quantidade,
+          }));
+
+          const { error: estoqueError } = await supabase.from('estoque').insert(rows);
+          if (estoqueError) throw estoqueError;
+        }
+
+        setToast({ type: 'success', message: 'Produto atualizado com sucesso!' });
+      } else {
+        // 2. Insert into `produtos`
+        const { data: produto, error: produtoError } = await supabase
+          .from('produtos')
+          .insert({
+            nome: nome.trim(),
+            descricao: descricao.trim() || null,
+            preco: parseFloat(preco) || 0,
+            imagem: imagemUrl,
+            destaque,
+            ativo,
+          })
+          .select('id')
+          .single();
+
+        if (produtoError) throw produtoError;
+
+        // 3. Insert each tamanho into `estoque`
+        if (estoqueEntries.length > 0 && produto?.id) {
+          const rows = estoqueEntries.map((entry) => ({
+            produto_id: produto.id,
+            tamanho: entry.tamanho,
+            quantidade: entry.quantidade,
+          }));
+
+          const { error: estoqueError } = await supabase.from('estoque').insert(rows);
+          if (estoqueError) throw estoqueError;
+        }
+
+        setToast({ type: 'success', message: 'Produto cadastrado com sucesso!' });
       }
 
-      setToast({ type: 'success', message: 'Produto salvo com sucesso!' });
-      setTimeout(() => navigate('/admin'), 1600);
+      setTimeout(() => navigate(`/admin?tab=${fromTab}`), 1600);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar produto.';
       setToast({ type: 'error', message: msg });
@@ -310,7 +413,7 @@ export const AddProduct: React.FC = () => {
         />
       )}
 
-      <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} activeTab={fromTab} />
 
       {/* ── MAIN ── */}
       <main className="flex-grow flex flex-col overflow-y-auto">
@@ -320,23 +423,23 @@ export const AddProduct: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate(`/admin?tab=${fromTab}`)}
               className="text-gray-medium hover:text-primary transition-colors cursor-pointer"
             >
               <ArrowLeft size={18} />
             </button>
             <h1 className="font-sans text-lg sm:text-xl font-bold text-primary tracking-tight">
-              Add New Product
+              {id ? 'Editar Produto' : 'Adicionar Novo Produto'}
             </h1>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate(`/admin?tab=${fromTab}`)}
               className="hidden sm:block px-4 py-2.5 border border-gray-light text-[10px] font-mono font-bold uppercase tracking-widest text-gray-medium hover:border-primary hover:text-primary transition-colors cursor-pointer"
             >
-              Discard Draft
+              {id ? 'Cancelar' : 'Descartar Rascunho'}
             </button>
             <button
               type="submit"
@@ -347,9 +450,9 @@ export const AddProduct: React.FC = () => {
               {saving ? (
                 <>
                   <span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                  Saving...
+                  Salvando...
                 </>
-              ) : 'Save Product'}
+              ) : id ? 'Atualizar Produto' : 'Salvar Produto'}
             </button>
           </div>
         </div>
@@ -378,21 +481,21 @@ export const AddProduct: React.FC = () => {
             {/* General Information */}
             <section className="bg-white border border-gray-light rounded-sm p-6 sm:p-8 shadow-sm">
               <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-gray-medium mb-6">
-                General Information
+                Informações Gerais
               </p>
 
               <div className="space-y-5">
                 {/* Nome */}
                 <div className="space-y-1.5">
                   <label htmlFor="prod-nome" className="block font-sans text-sm font-semibold text-primary">
-                    Product Name
+                    Nome do Produto
                     <span className="text-red-500 ml-1">*</span>
                   </label>
                   <input
                     id="prod-nome"
                     type="text"
                     required
-                    placeholder="e.g., Oversized Cashmere Wool Coat"
+                    placeholder="Ex: Casaco Sobretudo de Lã Cashmere"
                     value={nome}
                     onChange={(e) => setNome(e.target.value)}
                     className="w-full bg-gray-light/60 border border-transparent focus:border-primary focus:bg-white focus:outline-none px-4 py-3 font-sans text-sm text-primary placeholder:text-gray-medium/50 transition-all rounded-sm"
@@ -402,12 +505,12 @@ export const AddProduct: React.FC = () => {
                 {/* Descrição */}
                 <div className="space-y-1.5">
                   <label htmlFor="prod-desc" className="block font-sans text-sm font-semibold text-primary">
-                    Description
+                    Descrição
                   </label>
                   <textarea
                     id="prod-desc"
                     rows={4}
-                    placeholder="Describe the material, fit, and style details..."
+                    placeholder="Descreva o material, caimento e detalhes de estilo..."
                     value={descricao}
                     onChange={(e) => setDescricao(e.target.value)}
                     className="w-full bg-gray-light/60 border border-transparent focus:border-primary focus:bg-white focus:outline-none px-4 py-3 font-sans text-sm text-primary placeholder:text-gray-medium/50 transition-all rounded-sm resize-y"
@@ -417,7 +520,7 @@ export const AddProduct: React.FC = () => {
                 {/* Preço */}
                 <div className="space-y-1.5">
                   <label htmlFor="prod-preco" className="block font-sans text-sm font-semibold text-primary">
-                    Price (BRL)
+                    Preço (BRL)
                   </label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-sm text-gray-medium font-bold pointer-events-none">
@@ -456,11 +559,11 @@ export const AddProduct: React.FC = () => {
               </div>
             </section>
 
-            {/* Inventory & Variants → maps to `estoque` table */}
+            {/* Estoque e Variantes */}
             <section className="bg-white border border-gray-light rounded-sm p-6 sm:p-8 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-gray-medium">
-                  Inventory &amp; Variants
+                  Estoque e Variantes
                 </p>
                 {estoqueEntries.length > 0 && (
                   <span className="font-mono text-[10px] text-primary font-bold">
@@ -474,7 +577,7 @@ export const AddProduct: React.FC = () => {
 
               {/* Size selector buttons */}
               <div className="space-y-3">
-                <p className="font-sans text-sm font-semibold text-primary">Available Sizes</p>
+                <p className="font-sans text-sm font-semibold text-primary">Tamanhos Disponíveis</p>
                 <div className="flex flex-wrap gap-2">
                   {AVAILABLE_SIZES.map((size) => {
                     const isAdded = estoqueEntries.some((e) => e.tamanho === size);
@@ -556,18 +659,18 @@ export const AddProduct: React.FC = () => {
           {/* ── RIGHT COLUMN ── */}
           <div className="space-y-6">
 
-            {/* Product Media */}
+            {/* Mídia do Produto */}
             <section className="bg-white border border-gray-light rounded-sm p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-gray-medium">
-                  Product Media
+                  Mídia do Produto
                 </p>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="font-mono text-[10px] font-bold uppercase tracking-wider text-primary underline underline-offset-2 cursor-pointer hover:text-secondary transition-colors"
                 >
-                  Bulk Upload
+                  Upload em Lote
                 </button>
               </div>
 
@@ -592,10 +695,10 @@ export const AddProduct: React.FC = () => {
                     </div>
                     <div className="text-center px-4">
                       <p className="font-mono text-[11px] font-bold text-primary uppercase">
-                        Drop product images here
+                        Arraste as imagens do produto aqui
                       </p>
                       <p className="font-mono text-[9px] text-gray-medium mt-1 leading-relaxed">
-                        Recommended: 1280 × 1600px (3:4 Ratio)
+                        Recomendado: 1280 × 1600px (Proporção 3:4)
                       </p>
                     </div>
                   </>
@@ -608,7 +711,7 @@ export const AddProduct: React.FC = () => {
                   onClick={() => { setPreviewUrl(null); setImageFile(null); }}
                   className="mt-2 w-full flex items-center justify-center gap-2 font-mono text-[10px] text-gray-medium hover:text-red-500 uppercase tracking-wider transition-colors cursor-pointer py-1"
                 >
-                  <X size={12} /> Remove image
+                  <X size={12} /> Remover imagem
                 </button>
               )}
 
@@ -625,10 +728,10 @@ export const AddProduct: React.FC = () => {
               </p>
             </section>
 
-            {/* Live Preview */}
+            {/* Visualização em Tempo Real */}
             <section className="bg-white border border-gray-light rounded-sm p-6 shadow-sm">
               <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-gray-medium mb-4">
-                Live Preview
+                Visualização em Tempo Real
               </p>
 
               <div className="border border-gray-light rounded-sm overflow-hidden">

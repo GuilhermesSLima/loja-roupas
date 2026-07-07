@@ -22,46 +22,45 @@ export const AdminLogin: React.FC = () => {
     });
 
     if (signInError) {
-      setError('Credenciais inválidas. Verifique e tente novamente.');
+      setError('Credenciais inválidas. Verifique seu e-mail e senha e tente novamente.');
       setLoading(false);
       return;
     }
 
-    // Redirect to admin dashboard on success
     navigate('/admin');
   };
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">
 
-      {/* === MAIN CENTERED CONTENT === */}
+      {/* Conteúdo centralizado */}
       <div className="flex-grow flex flex-col items-center justify-center px-4">
 
-        {/* Brand Header */}
+        {/* Cabeçalho da marca */}
         <div className="text-center mb-12">
           <h1 className="font-sans text-4xl sm:text-5xl font-black tracking-[0.15em] text-primary uppercase">
             VOGUE &amp; VESTURE
           </h1>
           <p className="mt-2 font-mono text-[11px] tracking-[0.35em] text-gray-medium uppercase">
-            INTERNAL ADMINISTRATION
+            ADMINISTRAÇÃO INTERNA
           </p>
         </div>
 
-        {/* Login Card */}
+        {/* Card de login */}
         <div className="w-full max-w-sm border border-gray-light rounded-sm bg-white shadow-sm p-10">
 
           <div className="mb-8">
             <h2 className="font-sans text-2xl font-bold text-primary tracking-tight">
-              Admin Access
+              Acesso Admin
             </h2>
             <p className="mt-1.5 font-sans text-sm text-gray-medium">
-              Please enter your secure terminal key.
+              Insira suas credenciais de acesso ao painel.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* Email field */}
+            {/* E-mail */}
             <div className="space-y-1.5">
               <label
                 htmlFor="admin-email"
@@ -81,13 +80,13 @@ export const AdminLogin: React.FC = () => {
               />
             </div>
 
-            {/* Password field */}
+            {/* Senha */}
             <div className="space-y-1.5">
               <label
                 htmlFor="admin-password"
                 className="block font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-gray-medium"
               >
-                TERMINAL KEY
+                CHAVE DE ACESSO
               </label>
               <div className="relative">
                 <input
@@ -112,7 +111,7 @@ export const AdminLogin: React.FC = () => {
               </div>
             </div>
 
-            {/* Error message */}
+            {/* Mensagem de erro */}
             {error && (
               <div className="bg-red-50 border border-red-200 px-4 py-3 rounded-sm">
                 <p className="font-mono text-[10px] text-red-600 uppercase tracking-wide">
@@ -121,7 +120,7 @@ export const AdminLogin: React.FC = () => {
               </div>
             )}
 
-            {/* Submit button */}
+            {/* Botão de envio */}
             <button
               type="submit"
               disabled={loading}
@@ -130,11 +129,11 @@ export const AdminLogin: React.FC = () => {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                  Authorizing...
+                  Autorizando...
                 </span>
               ) : (
                 <>
-                  Authorize Access
+                  Autorizar Acesso
                   <ArrowRight size={16} />
                 </>
               )}
@@ -143,21 +142,21 @@ export const AdminLogin: React.FC = () => {
           </form>
         </div>
 
-        {/* Back to store link */}
+        {/* Voltar para a loja */}
         <Link
           to="/"
           className="mt-10 flex items-center gap-2 font-mono text-[10px] font-bold tracking-[0.25em] text-gray-medium hover:text-primary uppercase transition-colors group"
         >
           <ArrowLeft size={12} className="group-hover:-translate-x-0.5 transition-transform" />
-          BACK TO STORE
+          VOLTAR PARA A LOJA
         </Link>
       </div>
 
-      {/* === BOTTOM-RIGHT WATERMARK === */}
+      {/* Marca d'água inferior direita */}
       <div className="flex justify-end px-8 pb-6">
         <div className="text-right border-l-2 border-gray-light pl-4">
           <p className="font-mono text-[9px] font-bold tracking-[0.25em] text-gray-medium uppercase">
-            SECURE TERMINAL
+            TERMINAL SEGURO
           </p>
           <p className="font-mono text-[9px] text-gray-medium/60 tracking-wider">
             v.4.0.2
