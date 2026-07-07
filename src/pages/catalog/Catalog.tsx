@@ -196,7 +196,7 @@ export const Catalog: React.FC = () => {
             Coleção Completa
           </h1>
           <p className="font-sans text-xs text-gray-medium max-w-xl">
-            Explore nossa seleção exclusiva de roupas e acessórios. Modelagens modernas e caimento refinado pensados para o seu estilo contemporâneo.
+            Explore nossa seleção exclusiva de roupas e acessórios. 
           </p>
         </div>
 

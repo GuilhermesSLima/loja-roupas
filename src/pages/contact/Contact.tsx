@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
+// ─── ContactCard ─────────────────────────────────────────────────────────────
 interface ContactCardProps {
   title: string;
   detail: string;
@@ -59,6 +60,7 @@ const ContactCard: React.FC<ContactCardProps> = ({ title, detail, href, icon }) 
   );
 };
 
+// ─── Contact Page ─────────────────────────────────────────────────────────────
 export const Contact: React.FC = () => {
   const [lojaInfo, setLojaInfo] = useState<{
     telefone: string;
@@ -82,12 +84,11 @@ export const Contact: React.FC = () => {
         if (data && data.length > 0) {
           setLojaInfo(data[0]);
         } else {
-          // Fallback caso a tabela loja esteja vazia
           setLojaInfo({
             telefone: '+55 (11) 99999-9999',
             whatsapp: '+55 (11) 99999-9999',
-            instagram: '@vogueandbeyond',
-            email: 'contato@vogueandbeyond.com',
+            instagram: '@canhotosurf',
+            email: 'contato@canhotosurf.com',
             endereco: 'Av. Paulista, 1000 - São Paulo, SP',
           });
         }
@@ -114,9 +115,10 @@ export const Contact: React.FC = () => {
 
   const cleanNumber = (num: string) => num.replace(/\D/g, '');
 
-  const contactChannels = [];
+  // Build contact channels array
+  const contactChannels: { title: string; detail: string; href?: string; icon: React.ReactNode }[] = [];
 
-  if (lojaInfo?.whatsapp && lojaInfo.whatsapp.trim()) {
+  if (lojaInfo?.whatsapp?.trim()) {
     contactChannels.push({
       title: 'WhatsApp',
       detail: lojaInfo.whatsapp,
@@ -129,7 +131,7 @@ export const Contact: React.FC = () => {
     });
   }
 
-  if (lojaInfo?.instagram && lojaInfo.instagram.trim()) {
+  if (lojaInfo?.instagram?.trim()) {
     contactChannels.push({
       title: 'Instagram',
       detail: lojaInfo.instagram.startsWith('@') ? lojaInfo.instagram : `@${lojaInfo.instagram}`,
@@ -144,21 +146,7 @@ export const Contact: React.FC = () => {
     });
   }
 
-  if (lojaInfo?.email && lojaInfo.email.trim()) {
-    contactChannels.push({
-      title: 'E-mail',
-      detail: lojaInfo.email,
-      href: `mailto:${lojaInfo.email}`,
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-          <polyline points="22,6 12,13 2,6"/>
-        </svg>
-      ),
-    });
-  }
-
-  if (lojaInfo?.telefone && lojaInfo.telefone.trim()) {
+  if (lojaInfo?.telefone?.trim()) {
     contactChannels.push({
       title: 'Telefone',
       detail: lojaInfo.telefone,
@@ -171,11 +159,11 @@ export const Contact: React.FC = () => {
     });
   }
 
-  if (lojaInfo?.endereco && lojaInfo.endereco.trim()) {
+  if (lojaInfo?.endereco?.trim()) {
     contactChannels.push({
       title: 'Endereço',
-      href: 'https://maps.app.goo.gl/ho6MCFtYTDJbdXjt9',
       detail: lojaInfo.endereco,
+      href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lojaInfo.endereco)}`,
       icon: (
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -185,27 +173,29 @@ export const Contact: React.FC = () => {
     });
   }
 
+  // Google Maps embed URL from the stored address
+  const mapEmbedUrl = lojaInfo?.endereco?.trim()
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(lojaInfo.endereco)}&output=embed&hl=pt-BR&z=15`
+    : null;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 flex-grow flex flex-col justify-center">
-      
-      {/* Editorial Title Section */}
+
+      {/* ── Título ──────────────────────────────────────────────────────── */}
       <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
         <span className="font-mono text-xs font-semibold tracking-[0.2em] text-secondary uppercase block">
           // CANAIS DE ATENDIMENTO
         </span>
-        
         <h1 className="font-sans text-4xl sm:text-5xl font-black uppercase tracking-tight text-primary">
           Fale Conosco
         </h1>
-        
         <div className="w-12 h-1 bg-secondary mx-auto"></div>
-        
         <p className="font-sans text-sm text-gray-medium leading-relaxed pt-2">
           Estamos à disposição para transformar sua experiência. Entre em contato através de nossos canais oficiais de atendimento.
         </p>
       </div>
 
-      {/* Grid Channels Layout */}
+      {/* ── Cards de contato ────────────────────────────────────────────── */}
       {contactChannels.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto w-full">
           {contactChannels.map((channel, idx) => (
@@ -222,6 +212,28 @@ export const Contact: React.FC = () => {
         <div className="text-center py-10 border border-dashed border-gray-light rounded-lg max-w-md mx-auto w-full">
           <p className="font-mono text-xs text-gray-medium uppercase tracking-wider">
             Nenhum canal de atendimento cadastrado no momento.
+          </p>
+        </div>
+      )}
+
+      {/* ── Mapa Google Maps ────────────────────────────────────────────── */}
+      {mapEmbedUrl && (
+        <div className="max-w-4xl mx-auto w-full mt-8">
+          <div className="overflow-hidden rounded-xl border border-gray-light shadow-sm">
+            <iframe
+              id="contact-map"
+              title="Localização da loja"
+              src={mapEmbedUrl}
+              width="100%"
+              height="300"
+              style={{ border: 0, display: 'block' }}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+          <p className="text-center font-mono text-[10px] text-gray-medium uppercase tracking-widest mt-3">
+            {lojaInfo?.endereco}
           </p>
         </div>
       )}
