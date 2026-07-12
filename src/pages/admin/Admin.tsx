@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { deleteFromCloudinary } from '../../lib/cloudinary';
+import { deleteFromStorage } from '../../lib/storage';
 import {
   LayoutDashboard,
   Package,
@@ -10,8 +10,6 @@ import {
   LogOut,
   TrendingUp,
   Search,
-  Bell,
-  HelpCircle,
   Shirt,
   AlertTriangle,
   Star,
@@ -38,7 +36,7 @@ interface Produto {
   imagem: string | null;
   destaque: boolean;
   ativo: boolean;
-  created_at: string;
+  created_at: string | null;
   estoque: EstoqueItem[];   // joined from `estoque` table
   totalEstoque: number;     // computed sum
 }
@@ -82,7 +80,7 @@ export const Admin: React.FC = () => {
       const { data: prodData, error: prodError } = await supabase
         .from('produtos')
         .select('id, nome, descricao, preco, imagem, destaque, ativo, created_at')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false, nullsFirst: false });
 
       if (prodError) throw prodError;
 
@@ -147,13 +145,13 @@ export const Admin: React.FC = () => {
     if (!confirm('Deseja remover este produto? Esta ação não pode ser desfeita.')) return;
     setDeletingId(id);
     try {
-      // Exclui a imagem do Cloudinary se ela existir
+      // Exclui a imagem do Supabase Storage se ela existir
       const productToDelete = produtos.find((p) => p.id === id);
       if (productToDelete?.imagem) {
         try {
-          await deleteFromCloudinary(productToDelete.imagem);
-        } catch (cloudinaryErr) {
-          console.error('Erro ao deletar imagem do Cloudinary:', cloudinaryErr);
+          await deleteFromStorage(productToDelete.imagem);
+        } catch (storageErr) {
+          console.error('Erro ao deletar imagem do Supabase Storage:', storageErr);
         }
       }
 
@@ -240,6 +238,55 @@ export const Admin: React.FC = () => {
     [produtos, searchTerm]
   );
 
+  // ── Weekly performance chart data ──────────────────────────────────────────
+  const weeklyPerformance = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const daysMap = [
+      { d: 'SEG', count: 0, dayOfWeek: 1 },
+      { d: 'TER', count: 0, dayOfWeek: 2 },
+      { d: 'QUA', count: 0, dayOfWeek: 3 },
+      { d: 'QUI', count: 0, dayOfWeek: 4 },
+      { d: 'SEX', count: 0, dayOfWeek: 5 },
+      { d: 'SAB', count: 0, dayOfWeek: 6 },
+      { d: 'DOM', count: 0, dayOfWeek: 0 },
+    ];
+
+    produtos.forEach((p) => {
+      if (!p.created_at) return;
+      const createdDate = new Date(p.created_at);
+      if (createdDate >= startOfWeek && createdDate <= endOfWeek) {
+        const pDay = createdDate.getDay();
+        const found = daysMap.find((item) => item.dayOfWeek === pDay);
+        if (found) {
+          found.count += 1;
+        }
+      }
+    });
+
+    const maxCount = Math.max(...daysMap.map((item) => item.count), 1);
+    
+    return daysMap.map((item) => {
+      const h = item.count === 0 ? 8 : (item.count / maxCount) * 120 + 15;
+      const isToday = now.getDay() === item.dayOfWeek;
+      return {
+        ...item,
+        h,
+        active: isToday,
+      };
+    });
+  }, [produtos]);
+
   // ── Alerts (low stock) ─────────────────────────────────────────────────────
   const alertasCriticos = useMemo(() =>
     produtos.filter((p) => p.totalEstoque <= 5).slice(0, 4),
@@ -247,8 +294,10 @@ export const Admin: React.FC = () => {
   );
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  const formatDate = (iso: string) => {
+  const formatDate = (iso: string | null) => {
+    if (!iso) return 'Sem data';
     const d = new Date(iso);
+    if (isNaN(d.getTime())) return 'Sem data';
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
@@ -321,7 +370,7 @@ export const Admin: React.FC = () => {
             </div>
             <div className="flex items-center space-x-3 mt-5 border-b border-gray-light pb-4">
               <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-mono font-bold text-primary text-sm">
-                AP
+                <img src="/logo-black.png" alt="Logo perfil administrativo" />
               </div>
               <div>
                 <p className="text-xs font-bold text-primary font-mono tracking-wide uppercase">Perfil Admin</p>
@@ -372,33 +421,6 @@ export const Admin: React.FC = () => {
               {activeTab === 'estoque' && 'Controle de Estoque'}
               {activeTab === 'configuracoes' && 'Configurações'}
             </h1>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <div className="relative flex items-center">
-              <input
-                type="text"
-                placeholder="Buscar produto..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-44 sm:w-52 bg-white border border-gray-light text-xs font-mono px-4 py-2 pr-8 focus:outline-none focus:border-gray-medium"
-              />
-              <Search className="absolute right-3 w-4 h-4 text-gray-medium" />
-            </div>
-
-            <button
-              onClick={loadProdutos}
-              title="Atualizar"
-              className="w-8 h-8 rounded-full border border-gray-light flex items-center justify-center text-primary bg-white cursor-pointer hover:bg-gray-light transition-colors"
-            >
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            </button>
-            <button className="w-8 h-8 rounded-full border border-gray-light flex items-center justify-center text-primary bg-white cursor-pointer hover:bg-gray-light transition-colors">
-              <Bell size={13} />
-            </button>
-            <button className="w-8 h-8 rounded-full border border-gray-light flex items-center justify-center text-primary bg-white cursor-pointer hover:bg-gray-light transition-colors">
-              <HelpCircle size={13} />
-            </button>
           </div>
         </div>
 
@@ -477,21 +499,36 @@ export const Admin: React.FC = () => {
                     <p className="text-[10px] text-gray-medium font-mono uppercase mt-1">Movimentação de estoque por dia</p>
                   </div>
                   <div className="flex space-x-1 font-mono text-[9px]">
-                    <span className="px-2 py-1 bg-gray-light text-gray-medium uppercase rounded-sm">Diário</span>
                     <span className="px-2 py-1 bg-primary text-white uppercase rounded-sm font-bold">Semanal</span>
                   </div>
                 </div>
                 <div className="flex items-end justify-between h-44 px-2 border-b border-gray-light">
-                  {[
-                    { d: 'SEG', h: 70 }, { d: 'TER', h: 110 }, { d: 'QUA', h: 90, active: true },
-                    { d: 'QUI', h: 130 }, { d: 'SEX', h: 80 }, { d: 'SAB', h: 150 }, { d: 'DOM', h: 115, yellow: true },
-                  ].map(({ d, h, active, yellow }) => (
-                    <div key={d} className="flex flex-col items-center space-y-2 flex-1">
+                  {weeklyPerformance.map((item) => (
+                    <div key={item.d} className="flex flex-col items-center space-y-2 flex-1 relative group">
+                      {/* Tooltip no hover */}
+                      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center z-10 pointer-events-none transition-all duration-200">
+                        <div className="bg-primary text-white text-[9px] font-bold font-mono px-2.5 py-1 rounded-sm shadow-md whitespace-nowrap">
+                          {item.count} {item.count === 1 ? 'produto cadastrado' : 'produtos cadastrados'}
+                        </div>
+                        <div className="w-1.5 h-1.5 bg-primary rotate-45 -mt-1" />
+                      </div>
+
+                      {/* Barra do gráfico */}
                       <div
-                        className={`w-full max-w-[28px] rounded-sm transition-all hover:opacity-80 ${yellow ? 'bg-secondary' : active ? 'bg-primary' : 'bg-gray-light hover:bg-gray-medium/40'}`}
-                        style={{ height: `${h}px` }}
+                        className={`w-full max-w-[28px] rounded-sm transition-all duration-200 cursor-default ${
+                          item.count > 0
+                            ? item.active
+                              ? 'bg-secondary hover:brightness-95'
+                              : 'bg-primary hover:brightness-110'
+                            : item.active
+                              ? 'bg-secondary/35'
+                              : 'bg-gray-light hover:bg-gray-medium/30'
+                        }`}
+                        style={{ height: `${item.h}px` }}
                       />
-                      <span className={`font-mono text-[9px] ${active ? 'font-bold text-primary' : 'text-gray-medium'}`}>{d}</span>
+                      <span className={`font-mono text-[9px] ${item.active ? 'font-bold text-primary' : 'text-gray-medium'}`}>
+                        {item.d}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -652,8 +689,8 @@ export const Admin: React.FC = () => {
         {/* ══════════════════════════════════════════════════════════════════ */}
         {!loading && activeTab === 'estoque' && (
           <div className="bg-white border border-gray-light rounded-sm shadow-sm">
-            <div className="p-6 border-b border-gray-light flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+            <div className="p-6 border-b border-gray-light flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex-grow min-w-0">
                 <h3 className="font-sans text-sm font-bold text-primary tracking-tight uppercase">
                   Diretório de Produtos
                 </h3>
@@ -661,9 +698,32 @@ export const Admin: React.FC = () => {
                   {produtosFiltrados.length} produto{produtosFiltrados.length !== 1 ? 's' : ''} encontrado{produtosFiltrados.length !== 1 ? 's' : ''}
                 </p>
               </div>
+
+              {/* Campo de Busca */}
+              <div className="relative w-full md:max-w-xs lg:max-w-md">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-medium">
+                  <Search size={14} />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Buscar produto por nome..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none pl-9 pr-8 py-2.5 rounded-sm font-mono text-xs text-primary placeholder-gray-medium/70 transition-all"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-medium hover:text-primary cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
               <button
                 onClick={() => navigate('/admin/produtos/novo', { state: { from: activeTab } })}
-                className="bg-primary hover:bg-secondary text-white hover:text-primary font-mono text-xs font-bold tracking-widest uppercase px-6 py-3 flex items-center space-x-2 transition-all duration-300 cursor-pointer self-start sm:self-auto"
+                className="bg-primary hover:bg-secondary text-white hover:text-primary font-mono text-xs font-bold tracking-widest uppercase px-6 py-3 flex items-center justify-center space-x-2 transition-all duration-300 cursor-pointer w-full md:w-auto shrink-0"
               >
                 <Plus size={14} />
                 <span>Novo Produto</span>
