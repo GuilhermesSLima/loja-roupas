@@ -184,7 +184,6 @@ export const AddProduct: React.FC = () => {
 
   // ── Image state ────────────────────────────────────────────────────────────
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -215,7 +214,6 @@ export const AddProduct: React.FC = () => {
           setAtivo(!!prodData.ativo);
           if (prodData.imagem) {
             setPreviewUrl(prodData.imagem);
-            setOriginalImageUrl(prodData.imagem);
           }
         }
 

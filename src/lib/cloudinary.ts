@@ -21,7 +21,6 @@ export interface CloudinaryUploadResponse {
 export async function uploadImage(file: File): Promise<string> {
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-  const apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY;
   // apiSecret is also available, but we use unsigned preset for safety.
 
   const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
