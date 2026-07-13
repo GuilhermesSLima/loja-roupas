@@ -71,31 +71,56 @@ export const Home: React.FC<HomeProps> = () => {
   const [destaques, setDestaques] = useState<Destaque[]>([]);
   const [loadingDestaques, setLoadingDestaques] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [randomProducts, setRandomProducts] = useState<Destaque[]>([]);
   const trackRef = useRef<HTMLDivElement>(null);
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Fetch featured products ───────────────────────────────────────────────
+
+  // ── Fetch random products for "Nossos produtos" grid ────────────────────────────────────────
   useEffect(() => {
-    const fetchDestaques = async () => {
+    const fetchRandomProducts = async () => {
       try {
+        // PostgREST não suporta ORDER BY random() — buscamos tudo e embaralhamos no cliente
         const { data, error } = await supabase
           .from('produtos')
           .select('id, nome, preco, imagem, descricao')
-          .eq('destaque', true)
-          .eq('ativo', true)
-          .order('created_at', { ascending: false });
-
+          .eq('ativo', true);
         if (error) throw error;
-        setDestaques(data || []);
+        const all = data || [];
+        // Fisher-Yates shuffle
+        for (let i = all.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [all[i], all[j]] = [all[j], all[i]];
+        }
+        setRandomProducts(all.slice(0, 4));
       } catch (err) {
-        console.error('Erro ao carregar destaques:', err);
-      } finally {
-        setLoadingDestaques(false);
+        console.error('Erro ao carregar produtos aleatórios:', err);
       }
     };
-
-    fetchDestaques();
+    fetchRandomProducts();
   }, []);
+
+useEffect(() => {
+  const fetchDestaques = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('id, nome, preco, imagem, descricao')
+        .eq('destaque', true)
+        .eq('ativo', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setDestaques(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar destaques:', err);
+    } finally {
+      setLoadingDestaques(false);
+    }
+  };
+
+  fetchDestaques();
+}, []);
 
   // ── Carousel: visible cards count ────────────────────────────────────────
   const getVisibleCount = () => {
@@ -250,10 +275,9 @@ export const Home: React.FC<HomeProps> = () => {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* 3. Nossos Produtos Grid                                             */}
+      {/* 3. Nossos Produtos Grid                                            */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24">
-
         {/* Header */}
         <div className="flex items-end justify-between mb-6 border-b border-gray-200 pb-4">
           <div>
@@ -273,66 +297,86 @@ export const Home: React.FC<HomeProps> = () => {
 
         {/* Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          {/* Left: large card */}
-          <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[480px] lg:h-[600px]">
-            <img
-              src={catSuit}
-              alt="Coleção Principal"
-              className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-            <div className="absolute bottom-0 left-0 p-6 space-y-3">
-              <span className="block font-mono text-[9px] font-bold tracking-[0.3em] text-secondary uppercase">
-                Camisas
-              </span>
-              <Link to="/produtos">
-                <button className="bg-white text-primary font-mono text-xs font-bold px-5 py-2.5 rounded hover:bg-secondary transition-colors tracking-wide cursor-pointer">
-                  Compre agora
-                </button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Right: stacked smaller cards */}
-          <div className="flex flex-col gap-4">
-
-            {/* Top right: wide card */}
-            <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[200px] lg:h-[240px]">
+          {/* Left: large card (first random product) */}
+          {randomProducts.length > 0 && (
+            <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[480px] lg:h-[600px]">
               <img
-                src={catOutdoor}
-                alt="Urban Activewear"
+                src={randomProducts[0].imagem}
+                alt={randomProducts[0].nome}
                 className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              <div className="absolute bottom-0 left-0 p-6 space-y-3">
+                <span className="block font-mono text-[9px] font-bold tracking-[0.3em] text-secondary uppercase">
+                  {randomProducts[0].nome}
+                </span>
+                <Link to={`/produtos/${randomProducts[0].id}`}>
+                  <button className="bg-white text-primary font-mono text-xs font-bold px-5 py-2.5 rounded hover:bg-secondary transition-colors tracking-wide cursor-pointer">
+                    Ver produto
+                  </button>
+                </Link>
+              </div>
             </div>
+          )}
 
+          {/* Right: stacked smaller cards (next three random products) */}
+          <div className="flex flex-col gap-4">
+            {/* Top right: wide card */}
+            {randomProducts[1] && (
+              <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[200px] lg:h-[240px]">
+                <img
+                  src={randomProducts[1].imagem}
+                  alt={randomProducts[1].nome}
+                  className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                <div className="absolute bottom-0 left-0 p-4">
+                  <span className="block font-mono text-[9px] font-bold text-white uppercase">
+                    {randomProducts[1].nome}
+                  </span>
+                </div>
+              </div>
+            )}
             {/* Bottom right: two side-by-side cards */}
             <div className="grid grid-cols-2 gap-4 flex-1">
-              <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
-                <img
-                  src={catBag}
-                  alt="Acessórios"
-                  className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-              </div>
-              <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
-                <img
-                  src={catKnitwear}
-                  alt="Tricôs"
-                  className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-              </div>
+              {randomProducts[2] && (
+                <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
+                  <img
+                    src={randomProducts[2].imagem}
+                    alt={randomProducts[2].nome}
+                    className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                  <div className="absolute bottom-0 left-0 p-2">
+                    <span className="block font-mono text-[8px] font-bold text-white uppercase">
+                      {randomProducts[2].nome}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {randomProducts[3] && (
+                <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
+                  <img
+                    src={randomProducts[3].imagem}
+                    alt={randomProducts[3].nome}
+                    className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                  <div className="absolute bottom-0 left-0 p-2">
+                    <span className="block font-mono text-[8px] font-bold text-white uppercase">
+                      {randomProducts[3].nome}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
-
           </div>
         </div>
       </section>
-
-
-
     </main>
   );
 };
