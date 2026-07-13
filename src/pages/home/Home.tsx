@@ -4,11 +4,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { Hero } from '../../components/Hero';
 import { supabase } from '../../lib/supabase';
 
-// Import local category assets
-import catSuit from '../../assets/cat_suit.jpg';
-import catOutdoor from '../../assets/cat_outdoor.jpg';
-import catBag from '../../assets/cat_bag.jpg';
-import catKnitwear from '../../assets/cat_knitwear.jpg';
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Destaque {
