@@ -17,7 +17,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { uploadToStorage, deleteFromStorage } from '../../lib/storage';
+import { uploadImage } from '../../lib/cloudinary';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const AVAILABLE_SIZES = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'Único'];
@@ -295,16 +295,8 @@ export const AddProduct: React.FC = () => {
       // 1. Upload/Replace image (optional)
       let imagemUrl: string | null = previewUrl; // Mantém a imagem atual por padrão
       if (imageFile) {
-        // Se já existia uma imagem antiga cadastrada, exclui ela do Supabase Storage
-        if (originalImageUrl) {
-          try {
-            await deleteFromStorage(originalImageUrl);
-          } catch (delErr) {
-            console.error('Erro ao deletar imagem antiga do Supabase Storage:', delErr);
-          }
-        }
-        // Faz o upload da nova imagem
-        imagemUrl = await uploadToStorage(imageFile);
+        // Faz o upload da nova imagem via Cloudinary
+imagemUrl = await uploadImage(imageFile);
       }
 
       if (id) {
