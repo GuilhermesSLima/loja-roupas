@@ -92,6 +92,7 @@ export const ProductDetail: React.FC = () => {
   const [storeWhatsapp, setStoreWhatsapp] = useState('');
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
 
   // Reset quantity when size changes
   useEffect(() => {
@@ -132,6 +133,16 @@ export const ProductDetail: React.FC = () => {
         );
 
         setProduto({ ...prod, estoque: sortedStock });
+
+        // Fetch additional images for the product
+        const { data: imgData, error: imgErr } = await supabase
+          .from('produto_imagens')
+          .select('url')
+          .eq('produto_id', id);
+        if (!imgErr && imgData) {
+          const urls = imgData.map((r: any) => r.url).filter(Boolean);
+          setAdditionalImages(urls);
+        }
 
         // Fetch store configurations
         const { data: storeData } = await supabase
@@ -199,7 +210,7 @@ export const ProductDetail: React.FC = () => {
   };
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const images = produto ? [produto.imagem].filter(Boolean) : [];
+  const images = produto ? [produto.imagem, ...additionalImages].filter(Boolean) : [];
   const selectedStockItem = produto?.estoque.find((e) => e.tamanho === selectedSize);
   const stockForSelected = selectedStockItem?.quantidade ?? null;
 
