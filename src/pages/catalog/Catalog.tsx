@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { useStore } from '../../context/StoreContext';
 import { Badge } from '../../components/Badge';
 import { RefreshCw, Filter, X, Check, Search } from 'lucide-react';
 
@@ -41,6 +42,7 @@ const getColorFromNameOrDesc = (name: string, desc: string | null): string => {
 };
 
 export const Catalog: React.FC = () => {
+  const { lojaId, storeInfo } = useStore();
   // ── States ────────────────────────────────────────────────────────────────
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,22 +69,30 @@ export const Catalog: React.FC = () => {
 
   // ── Fetch dynamic catalog data ────────────────────────────────────────────
   const fetchCatalogData = async () => {
+    if (!lojaId) return;
     setLoading(true);
     try {
       // 1. Fetch active products
       const { data: prodData, error: prodError } = await supabase
         .from('produtos')
         .select('id, nome, descricao, preco, imagem, destaque, created_at')
-        .eq('ativo', true);
+        .eq('ativo', true)
+        .eq('loja_id', lojaId);
 
       if (prodError) throw prodError;
 
-      // 2. Fetch inventory entries for sizes
-      const { data: estData, error: estError } = await supabase
-        .from('estoque')
-        .select('produto_id, tamanho, quantidade');
+      // 2. Fetch inventory entries for sizes only for this store's products
+      const prodIds = (prodData || []).map((p) => p.id);
+      let estData: any[] = [];
+      if (prodIds.length > 0) {
+        const { data, error: estError } = await supabase
+          .from('estoque')
+          .select('produto_id, tamanho, quantidade')
+          .in('produto_id', prodIds);
 
-      if (estError) throw estError;
+        if (estError) throw estError;
+        estData = data || [];
+      }
 
       // Map sizes per product
       const sizesMap: Record<string, string[]> = {};
@@ -104,7 +114,7 @@ export const Catalog: React.FC = () => {
           name,
           category: getCategoryFromName(name),
           price: parseFloat(p.preco) || 0,
-          image: p.imagem || 'https://www2.camara.leg.br/atividade-legislativa/comissoes/comissoes-permanentes/cindra/imagens/sem.jpg.gif/image_preview',
+          image: p.imagem || '/sem-imagem.png',
           tag: p.destaque ? 'DESTAQUE' : undefined,
           sizes: sizesMap[p.id] || [],
           color: getColorFromNameOrDesc(name, desc),
@@ -121,8 +131,10 @@ export const Catalog: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchCatalogData();
-  }, []);
+    if (lojaId) {
+      fetchCatalogData();
+    }
+  }, [lojaId]);
 
   // ── Filters & Sorter Logic ────────────────────────────────────────────────
   const filteredProducts = useMemo(() => {
@@ -333,7 +345,7 @@ export const Catalog: React.FC = () => {
               {displayedProducts.map((p) => (
                 <Link
                   key={p.id}
-                  to={`/produtos/${p.id}`}
+                  to={`/loja/${storeInfo?.slug || ''}/produtos/${p.id}`}
                   className="group flex flex-col h-full bg-white relative overflow-hidden"
                 >
                   {/* Card Image */}

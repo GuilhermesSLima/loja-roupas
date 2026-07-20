@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { ArrowLeft, RefreshCw, ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
 import { Badge } from '../../components/Badge';
 import { useCart } from '../../context/CartContext';
+import { useStore } from '../../context/StoreContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface EstoqueItem {
@@ -46,14 +47,14 @@ const sortSizes = (sizes: EstoqueItem[]) =>
 interface RelatedCardProps {
   produto: Produto;
 }
-const RelatedCard: React.FC<RelatedCardProps> = ({ produto }) => (
+const RelatedCard: React.FC<RelatedCardProps & { baseRoute: string }> = ({ produto, baseRoute }) => (
   <Link
-    to={`/produtos/${produto.id}`}
+    to={`${baseRoute}/produtos/${produto.id}`}
     className="group flex flex-col"
   >
     <div className="aspect-[3/4] overflow-hidden bg-gray-light rounded-sm relative">
       <img
-        src={produto.imagem || 'https://placehold.co/400x500/f5f5f5/999?text=Sem+Imagem'}
+        src={produto.imagem || '/sem-imagem.png'}
         alt={produto.nome}
         className="w-full h-full object-cover object-center group-hover:scale-[1.03] transition-transform duration-500 ease-out"
         loading="lazy"
@@ -80,6 +81,7 @@ const RelatedCard: React.FC<RelatedCardProps> = ({ produto }) => (
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export const ProductDetail: React.FC = () => {
+  const { lojaId, storeInfo } = useStore();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addItem } = useCart();
@@ -144,14 +146,9 @@ export const ProductDetail: React.FC = () => {
           setAdditionalImages(urls);
         }
 
-        // Fetch store configurations
-        const { data: storeData } = await supabase
-          .from('loja')
-          .select('whatsapp')
-          .limit(1);
-
-        if (storeData && storeData.length > 0) {
-          setStoreWhatsapp(storeData[0].whatsapp || '');
+        // Set store whatsapp from context
+        if (storeInfo) {
+          setStoreWhatsapp(storeInfo.whatsapp || '');
         }
 
         // Related products (same category heuristic, exclude current)
@@ -159,6 +156,7 @@ export const ProductDetail: React.FC = () => {
           .from('produtos')
           .select('id, nome, descricao, preco, imagem, destaque, ativo, created_at')
           .eq('ativo', true)
+          .eq('loja_id', lojaId)
           .neq('id', id)
           .limit(12);
 
@@ -182,7 +180,7 @@ export const ProductDetail: React.FC = () => {
     };
 
     fetchProduto();
-  }, [id]);
+  }, [id, lojaId]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleAddToCart = () => {
@@ -196,7 +194,7 @@ export const ProductDetail: React.FC = () => {
       estoqueDisponivel: stockForSelected || 0,
       quantidade: quantity,
     });
-    navigate('/carrinho');
+    navigate(`/loja/${storeInfo?.slug || ''}/carrinho`);
   };
 
   const handleShare = async () => {
@@ -210,7 +208,11 @@ export const ProductDetail: React.FC = () => {
   };
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const images = produto ? [produto.imagem, ...additionalImages].filter(Boolean) : [];
+  const images = produto 
+    ? ( [produto.imagem, ...additionalImages].filter(Boolean).length > 0 
+        ? [produto.imagem, ...additionalImages].filter(Boolean) as string[]
+        : ['/sem-imagem.png'] )
+    : ['/sem-imagem.png'];
   const selectedStockItem = produto?.estoque.find((e) => e.tamanho === selectedSize);
   const stockForSelected = selectedStockItem?.quantidade ?? null;
 
@@ -234,7 +236,7 @@ export const ProductDetail: React.FC = () => {
           Produto não encontrado ou indisponível.
         </p>
         <button
-          onClick={() => navigate('/produtos')}
+          onClick={() => navigate(`/loja/${storeInfo?.slug || ''}/produtos`)}
           className="mt-4 border border-primary px-6 py-2.5 text-xs font-mono font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-white transition-all cursor-pointer"
         >
           Voltar ao Catálogo
@@ -251,9 +253,9 @@ export const ProductDetail: React.FC = () => {
 
       {/* ── Breadcrumb ───────────────────────────────────────────────────── */}
       <nav className="flex items-center gap-2 font-mono text-[10px] text-gray-medium uppercase tracking-widest mb-8">
-        <Link to="/" className="hover:text-primary transition-colors">Início</Link>
+        <Link to={`/loja/${storeInfo?.slug || ''}`} className="hover:text-primary transition-colors">Início</Link>
         <span>/</span>
-        <Link to="/produtos" className="hover:text-primary transition-colors">Produtos</Link>
+        <Link to={`/loja/${storeInfo?.slug || ''}/produtos`} className="hover:text-primary transition-colors">Produtos</Link>
         <span>/</span>
         <span className="text-primary font-bold truncate max-w-[160px]">{produto.nome}</span>
       </nav>
@@ -532,7 +534,7 @@ export const ProductDetail: React.FC = () => {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {related.map((rel) => (
-              <RelatedCard key={rel.id} produto={rel} />
+              <RelatedCard key={rel.id} produto={rel} baseRoute={`/loja/${storeInfo?.slug || ''}`} />
             ))}
           </div>
         </section>

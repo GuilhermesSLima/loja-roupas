@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { deleteFromStorage } from '../../lib/storage';
+import { uploadImage, deleteImage, extractPublicIdFromUrl } from '../../services/media';
+import { useAuth } from '../../hooks/useAuth';
 import {
   LayoutDashboard,
   Package,
@@ -20,6 +21,9 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  Upload,
+  ImageIcon,
+  Trash,
 } from 'lucide-react';
 
 // ─── Types (matching Supabase schema) ────────────────────────────────────────
@@ -34,6 +38,7 @@ interface Produto {
   descricao: string | null;
   preco: number;
   imagem: string | null;
+  imagem_public_id: string | null;
   destaque: boolean;
   ativo: boolean;
   created_at: string | null;
@@ -45,6 +50,7 @@ interface Produto {
 export const Admin: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { lojaId: adminLojaId } = useAuth();
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -57,13 +63,29 @@ export const Admin: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // ── Store Config States ──
+  const [nome, setNome] = useState('');
+  const [slug, setSlug] = useState('');
   const [telefone, setTelefone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [instagram, setInstagram] = useState('');
   const [email, setEmail] = useState('');
   const [endereco, setEndereco] = useState('');
+  const [corPrimaria, setCorPrimaria] = useState('#111111');
+  const [corSecundaria, setCorSecundaria] = useState('#F5C518');
+  const [corBg, setCorBg] = useState('#FFFFFF');
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [configToast, setConfigToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // ── Logo & Banner States ──
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadToast, setUploadToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Sync tab to URL so navigation back restores correct tab
   const changeTab = (tab: typeof activeTab) => {
@@ -74,29 +96,35 @@ export const Admin: React.FC = () => {
 
   // ── Load products and store configurations from Supabase ────────────────────
   const loadProdutos = useCallback(async () => {
+    if (!adminLojaId) return;
     setLoading(true);
     try {
-      // Fetch products
+      // Fetch products filtered by loja_id (multi-tenant isolation)
       const { data: prodData, error: prodError } = await supabase
         .from('produtos')
-        .select('id, nome, descricao, preco, imagem, destaque, ativo, created_at')
+        .select('id, nome, descricao, preco, imagem, imagem_public_id, destaque, ativo, created_at')
+        .eq('loja_id', adminLojaId)
         .order('created_at', { ascending: false, nullsFirst: false });
 
       if (prodError) throw prodError;
 
-      // Fetch all estoque entries
-      const { data: estoqueData, error: estoqueError } = await supabase
-        .from('estoque')
-        .select('produto_id, tamanho, quantidade');
-
-      if (estoqueError) throw estoqueError;
-
-      // Group estoque by produto_id
+      // Fetch estoque for this loja's products only
+      const prodIds = (prodData || []).map((p) => p.id);
       const estoqueMap: Record<string, EstoqueItem[]> = {};
-      (estoqueData || []).forEach((row) => {
-        if (!estoqueMap[row.produto_id]) estoqueMap[row.produto_id] = [];
-        estoqueMap[row.produto_id].push({ tamanho: row.tamanho, quantidade: row.quantidade });
-      });
+
+      if (prodIds.length > 0) {
+        const { data: estoqueData, error: estoqueError } = await supabase
+          .from('estoque')
+          .select('produto_id, tamanho, quantidade')
+          .in('produto_id', prodIds);
+
+        if (estoqueError) throw estoqueError;
+
+        (estoqueData || []).forEach((row) => {
+          if (!estoqueMap[row.produto_id]) estoqueMap[row.produto_id] = [];
+          estoqueMap[row.produto_id].push({ tamanho: row.tamanho, quantidade: row.quantidade });
+        });
+      }
 
       // Merge
       const merged: Produto[] = (prodData || []).map((p) => {
@@ -107,10 +135,11 @@ export const Admin: React.FC = () => {
 
       setProdutos(merged);
 
-      // Fetch store configurations from table `loja`
+      // Fetch store configurations filtered by loja_id
       const { data: configData, error: configError } = await supabase
         .from('loja')
         .select('*')
+        .eq('id', adminLojaId)
         .limit(1);
 
       if (configError) throw configError;
@@ -122,21 +151,29 @@ export const Admin: React.FC = () => {
         setInstagram(c.instagram || '');
         setEmail(c.email || '');
         setEndereco(c.endereco || '');
+        setNome(c.nome || '');
+        setSlug(c.slug || '');
+        setCorPrimaria(c.cor_primaria || '#111111');
+        setCorSecundaria(c.cor_secundaria || '#F5C518');
+        setCorBg(c.cor_bg || '#FFFFFF');
+        setLogoUrl(c.logo || null);
+        setBannerUrl(c.banner || null);
       }
     } catch (err) {
       console.error('Erro ao carregar produtos/configurações:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [adminLojaId]);
 
   useEffect(() => {
     loadProdutos();
   }, [loadProdutos]);
 
   // ── Logout ─────────────────────────────────────────────────────────────────
+  const { signOut } = useAuth();
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     navigate('/admin/login');
   };
 
@@ -145,20 +182,48 @@ export const Admin: React.FC = () => {
     if (!confirm('Deseja remover este produto? Esta ação não pode ser desfeita.')) return;
     setDeletingId(id);
     try {
-      // Exclui a imagem do Supabase Storage se ela existir
       const productToDelete = produtos.find((p) => p.id === id);
-      if (productToDelete?.imagem) {
-        try {
-          await deleteFromStorage(productToDelete.imagem);
-        } catch (storageErr) {
-          console.error('Erro ao deletar imagem do Supabase Storage:', storageErr);
+      
+      // 1. Excluir imagens secundárias do Cloudinary e do banco
+      const { data: secImages, error: secError } = await supabase
+        .from('produto_imagens')
+        .select('id, url')
+        .eq('produto_id', id);
+      
+      if (!secError && secImages && secImages.length > 0) {
+        for (const img of secImages) {
+          const pubId = extractPublicIdFromUrl(img.url);
+          if (pubId) {
+            try {
+              await deleteImage(pubId);
+            } catch (mediaErr) {
+              console.error(`Erro ao deletar imagem secundária ${pubId} do Cloudinary:`, mediaErr);
+            }
+          }
+        }
+        // Exclui os registros de produto_imagens
+        await supabase.from('produto_imagens').delete().eq('produto_id', id);
+      }
+
+      // 2. Excluir a imagem principal do Cloudinary
+      if (productToDelete) {
+        const mainPubId = productToDelete.imagem_public_id || (productToDelete.imagem ? extractPublicIdFromUrl(productToDelete.imagem) : null);
+        if (mainPubId) {
+          try {
+            await deleteImage(mainPubId);
+          } catch (mediaErr) {
+            console.error(`Erro ao deletar imagem principal ${mainPubId} do Cloudinary:`, mediaErr);
+          }
         }
       }
 
-      // Delete estoque entries first (FK constraint)
+      // 3. Delete estoque entries first (FK constraint)
       await supabase.from('estoque').delete().eq('produto_id', id);
+      
+      // 4. Delete product from database
       const { error } = await supabase.from('produtos').delete().eq('id', id);
       if (error) throw error;
+      
       setProdutos((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       console.error('Erro ao deletar:', err);
@@ -171,46 +236,31 @@ export const Admin: React.FC = () => {
   // ── Save store configurations ──────────────────────────────────────────────
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!adminLojaId) return;
     setSalvandoConfig(true);
     setConfigToast(null);
 
     const payload = {
+      nome: nome.trim(),
+      slug: slug.trim().toLowerCase(),
       telefone: telefone.trim(),
       whatsapp: whatsapp.trim(),
       instagram: instagram.trim(),
       email: email.trim(),
       endereco: endereco.trim(),
+      cor_primaria: corPrimaria,
+      cor_secundaria: corSecundaria,
+      cor_bg: corBg,
     };
 
     try {
-      // Fetch existing record
-      const { data: existing, error: fetchErr } = await supabase
+      // Update the loja record for this tenant directly by id
+      const { error: updateErr } = await supabase
         .from('loja')
-        .select('*')
-        .limit(1);
+        .update(payload)
+        .eq('id', adminLojaId);
 
-      if (fetchErr) throw fetchErr;
-
-      if (existing && existing.length > 0) {
-        // Se a tabela possui id ou outra PK, faz o update
-        const firstRecord = existing[0];
-        const identifierKey = firstRecord.id ? 'id' : Object.keys(firstRecord)[0];
-        const identifierVal = firstRecord[identifierKey];
-
-        const { error: updateErr } = await supabase
-          .from('loja')
-          .update(payload)
-          .eq(identifierKey, identifierVal);
-
-        if (updateErr) throw updateErr;
-      } else {
-        // Se a tabela estiver vazia, insere o registro
-        const { error: insertErr } = await supabase
-          .from('loja')
-          .insert(payload);
-
-        if (insertErr) throw insertErr;
-      }
+      if (updateErr) throw updateErr;
 
       setConfigToast({ type: 'success', message: 'Configurações da loja atualizadas com sucesso!' });
     } catch (err: any) {
@@ -218,6 +268,101 @@ export const Admin: React.FC = () => {
       setConfigToast({ type: 'error', message: 'Erro ao salvar as configurações da loja.' });
     } finally {
       setSalvandoConfig(false);
+    }
+  };
+
+  // ── Upload Logo ────────────────────────────────────────────────────────────
+  const handleUploadLogo = async () => {
+    if (!logoFile || !adminLojaId) return;
+    setUploadingLogo(true);
+    setUploadToast(null);
+    try {
+      // Delete old logo from Cloudinary if exists
+      if (logoUrl) {
+        const oldPubId = extractPublicIdFromUrl(logoUrl);
+        if (oldPubId) await deleteImage(oldPubId);
+      }
+      const result = await uploadImage(logoFile, adminLojaId);
+      // Save new logo URL to Supabase
+      const { error: updateErr } = await supabase
+        .from('loja')
+        .update({ logo: result.url })
+        .eq('id', adminLojaId);
+      if (updateErr) throw updateErr;
+      setLogoUrl(result.url);
+      setLogoFile(null);
+      setLogoPreview(null);
+      setUploadToast({ type: 'success', message: 'Logo atualizada com sucesso!' });
+    } catch (err: any) {
+      console.error('Erro ao fazer upload da logo:', err);
+      setUploadToast({ type: 'error', message: 'Erro ao enviar a logo. Tente novamente.' });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  // ── Upload Banner ──────────────────────────────────────────────────────────
+  const handleUploadBanner = async () => {
+    if (!bannerFile || !adminLojaId) return;
+    setUploadingBanner(true);
+    setUploadToast(null);
+    try {
+      // Delete old banner from Cloudinary if exists
+      if (bannerUrl) {
+        const oldPubId = extractPublicIdFromUrl(bannerUrl);
+        if (oldPubId) await deleteImage(oldPubId);
+      }
+      const result = await uploadImage(bannerFile, adminLojaId);
+      const { error: updateErr } = await supabase
+        .from('loja')
+        .update({ banner: result.url })
+        .eq('id', adminLojaId);
+      if (updateErr) throw updateErr;
+      setBannerUrl(result.url);
+      setBannerFile(null);
+      setBannerPreview(null);
+      setUploadToast({ type: 'success', message: 'Banner atualizado com sucesso!' });
+    } catch (err: any) {
+      console.error('Erro ao fazer upload do banner:', err);
+      setUploadToast({ type: 'error', message: 'Erro ao enviar o banner. Tente novamente.' });
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
+
+  // ── Remove Logo ────────────────────────────────────────────────────────────
+  const handleRemoveLogo = async () => {
+    if (!adminLojaId || !logoUrl) return;
+    if (!confirm('Deseja remover a logo atual?')) return;
+    try {
+      const pubId = extractPublicIdFromUrl(logoUrl);
+      if (pubId) await deleteImage(pubId);
+      await supabase.from('loja').update({ logo: null }).eq('id', adminLojaId);
+      setLogoUrl(null);
+      setLogoFile(null);
+      setLogoPreview(null);
+      setUploadToast({ type: 'success', message: 'Logo removida.' });
+    } catch (err) {
+      console.error('Erro ao remover logo:', err);
+      setUploadToast({ type: 'error', message: 'Erro ao remover a logo.' });
+    }
+  };
+
+  // ── Remove Banner ──────────────────────────────────────────────────────────
+  const handleRemoveBanner = async () => {
+    if (!adminLojaId || !bannerUrl) return;
+    if (!confirm('Deseja remover o banner atual?')) return;
+    try {
+      const pubId = extractPublicIdFromUrl(bannerUrl);
+      if (pubId) await deleteImage(pubId);
+      await supabase.from('loja').update({ banner: null }).eq('id', adminLojaId);
+      setBannerUrl(null);
+      setBannerFile(null);
+      setBannerPreview(null);
+      setUploadToast({ type: 'success', message: 'Banner removido.' });
+    } catch (err) {
+      console.error('Erro ao remover banner:', err);
+      setUploadToast({ type: 'error', message: 'Erro ao remover o banner.' });
     }
   };
 
@@ -364,16 +509,23 @@ export const Admin: React.FC = () => {
         <div className="space-y-8">
           {/* Brand */}
           <div>
-            <div className="flex flex-col items-start gap-2">
-              <img src="/logo-black.png" alt="Canhoto Surf" className="h-10 w-auto object-contain" />
-              <span className="font-mono text-[9px] text-gray-medium uppercase tracking-wider">Painel Administrativo</span>
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center shadow-md">
+                  <Shirt className="h-4 w-4 text-primary stroke-[2.5]" />
+                </div>
+                <span className="font-sans font-extrabold text-base tracking-tight text-primary">
+                  sualoj<span className="text-secondary">4</span>
+                </span>
+              </div>
+              <span className="font-mono text-[8px] text-gray-medium uppercase tracking-wider">Painel Administrativo</span>
             </div>
             <div className="flex items-center space-x-3 mt-5 border-b border-gray-light pb-4">
               <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-mono font-bold text-primary text-sm">
-                <img src="/logo-black.png" alt="Logo perfil administrativo" />
+                <Shirt size={16} />
               </div>
               <div>
-                <p className="text-xs font-bold text-primary font-mono tracking-wide uppercase">Perfil Admin</p>
+                <p className="text-xs font-bold text-primary font-mono tracking-wide uppercase">{nome || 'Minha Loja'}</p>
                 <span className="text-[10px] text-gray-medium font-mono uppercase">Gerente da Loja</span>
               </div>
             </div>
@@ -865,103 +1017,355 @@ export const Admin: React.FC = () => {
         {/* TAB: CONFIGURAÇÕES                                                 */}
         {/* ══════════════════════════════════════════════════════════════════ */}
         {!loading && activeTab === 'configuracoes' && (
-          <div className="bg-white border border-gray-light rounded-sm shadow-sm p-6 sm:p-8 max-w-2xl">
-            <h3 className="font-sans text-sm font-bold text-primary tracking-tight uppercase border-b border-gray-light pb-4 mb-6">
-              Configurações da Loja
-            </h3>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 
-            {configToast && (
-              <div className={`mb-6 flex items-center gap-3 px-4 py-3 border rounded-sm text-[10px] font-mono font-bold uppercase tracking-wide ${
-                configToast.type === 'success'
-                  ? 'bg-green-50 border-green-200 text-green-700'
-                  : 'bg-red-50 border-red-200 text-red-600'
-              }`}>
-                <span>{configToast.type === 'success' ? '✓' : '⚠'}</span>
-                {configToast.message}
+            {/* ── COLUNA ESQUERDA: Dados da Loja ─────────────────────────── */}
+            <div className="bg-white border border-gray-light rounded-sm shadow-sm p-6 sm:p-8">
+              <h3 className="font-sans text-sm font-bold text-primary tracking-tight uppercase border-b border-gray-light pb-4 mb-6">
+                Configurações da Loja
+              </h3>
+
+              {configToast && (
+                <div className={`mb-6 flex items-center gap-3 px-4 py-3 border rounded-sm text-[10px] font-mono font-bold uppercase tracking-wide ${
+                  configToast.type === 'success'
+                    ? 'bg-green-50 border-green-200 text-green-700'
+                    : 'bg-red-50 border-red-200 text-red-600'
+                }`}>
+                  <span>{configToast.type === 'success' ? '✓' : '⚠'}</span>
+                  {configToast.message}
+                </div>
+              )}
+
+              <form onSubmit={handleSaveConfig} className="space-y-5 font-mono text-xs text-primary">
+                {/* Nome da Loja */}
+                <div className="space-y-1.5">
+                  <label htmlFor="cfg-nome" className="block text-gray-medium uppercase font-bold">Nome da Loja</label>
+                  <input
+                    id="cfg-nome"
+                    type="text"
+                    placeholder="Minha Loja"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
+                    required
+                  />
+                </div>
+
+                {/* Slug */}
+                <div className="space-y-1.5">
+                  <label htmlFor="cfg-slug" className="block text-gray-medium uppercase font-bold">Slug de Acesso (URL)</label>
+                  <input
+                    id="cfg-slug"
+                    type="text"
+                    placeholder="minha-loja"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
+                    required
+                  />
+                  <p className="text-[10px] text-gray-medium mt-1">
+                    Sua loja ficará acessível no endereço: <span className="font-bold text-primary">/loja/{slug || 'minha-loja'}</span>
+                  </p>
+                </div>
+
+                {/* Telefone */}
+                <div className="space-y-1.5">
+                  <label htmlFor="cfg-telefone" className="block text-gray-medium uppercase font-bold">Telefone</label>
+                  <input
+                    id="cfg-telefone"
+                    type="text"
+                    placeholder="+55 (11) 90000-0000"
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
+                  />
+                </div>
+
+                {/* WhatsApp */}
+                <div className="space-y-1.5">
+                  <label htmlFor="cfg-whatsapp" className="block text-gray-medium uppercase font-bold">WhatsApp</label>
+                  <input
+                    id="cfg-whatsapp"
+                    type="text"
+                    placeholder="+55 (11) 90000-0000"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
+                  />
+                </div>
+
+                {/* Instagram */}
+                <div className="space-y-1.5">
+                  <label htmlFor="cfg-instagram" className="block text-gray-medium uppercase font-bold">Instagram</label>
+                  <input
+                    id="cfg-instagram"
+                    type="text"
+                    placeholder="@seu_instagram"
+                    value={instagram}
+                    onChange={(e) => setInstagram(e.target.value)}
+                    className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
+                  />
+                </div>
+
+                {/* E-mail */}
+                <div className="space-y-1.5">
+                  <label htmlFor="cfg-email" className="block text-gray-medium uppercase font-bold">E-mail</label>
+                  <input
+                    id="cfg-email"
+                    type="email"
+                    placeholder="contato@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
+                  />
+                </div>
+
+                {/* Endereço */}
+                <div className="space-y-1.5">
+                  <label htmlFor="cfg-endereco" className="block text-gray-medium uppercase font-bold">Endereço</label>
+                  <textarea
+                    id="cfg-endereco"
+                    rows={3}
+                    placeholder="Rua, Número, Bairro - Cidade, Estado"
+                    value={endereco}
+                    onChange={(e) => setEndereco(e.target.value)}
+                    className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={salvandoConfig}
+                  className="w-full bg-primary hover:bg-secondary text-white hover:text-primary font-mono text-[10px] font-bold tracking-widest uppercase py-3.5 transition-all duration-300 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {salvandoConfig ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      Salvando Configurações...
+                    </>
+                  ) : (
+                    'Salvar Configurações'
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* ── COLUNA DIREITA: Cores + Identidade Visual ──────────────── */}
+            <div className="flex flex-col gap-6">
+
+              {/* Toast de upload */}
+              {uploadToast && (
+                <div className={`flex items-center gap-3 px-4 py-3 border rounded-sm text-[10px] font-mono font-bold uppercase tracking-wide ${
+                  uploadToast.type === 'success'
+                    ? 'bg-green-50 border-green-200 text-green-700'
+                    : 'bg-red-50 border-red-200 text-red-600'
+                }`}>
+                  <span>{uploadToast.type === 'success' ? '✓' : '⚠'}</span>
+                  {uploadToast.message}
+                </div>
+              )}
+
+              {/* Paleta de Cores */}
+              <div className="bg-white border border-gray-light rounded-sm shadow-sm p-6 sm:p-8">
+                <h3 className="font-sans text-sm font-bold text-primary tracking-tight uppercase border-b border-gray-light pb-4 mb-6">
+                  Paleta de Cores da Empresa
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 font-mono text-xs">
+                  {/* Cor Primária */}
+                  <div className="space-y-2">
+                    <label htmlFor="cfg-cor-primaria" className="block text-gray-medium uppercase font-bold text-[10px]">Cor Primária</label>
+                    <div
+                      className="w-full h-16 rounded-sm border border-gray-light cursor-pointer relative overflow-hidden"
+                      style={{ backgroundColor: corPrimaria }}
+                      onClick={() => document.getElementById('cfg-cor-primaria')?.click()}
+                    >
+                      <input
+                        id="cfg-cor-primaria"
+                        type="color"
+                        value={corPrimaria}
+                        onChange={(e) => setCorPrimaria(e.target.value)}
+                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={corPrimaria}
+                      onChange={(e) => setCorPrimaria(e.target.value)}
+                      className="w-full bg-gray-light/40 border border-gray-light px-2 py-1.5 text-[10px] rounded-sm font-mono text-center"
+                      maxLength={7}
+                    />
+                  </div>
+
+                  {/* Cor Secundária */}
+                  <div className="space-y-2">
+                    <label htmlFor="cfg-cor-secundaria" className="block text-gray-medium uppercase font-bold text-[10px]">Cor Secundária</label>
+                    <div
+                      className="w-full h-16 rounded-sm border border-gray-light cursor-pointer relative overflow-hidden"
+                      style={{ backgroundColor: corSecundaria }}
+                      onClick={() => document.getElementById('cfg-cor-secundaria')?.click()}
+                    >
+                      <input
+                        id="cfg-cor-secundaria"
+                        type="color"
+                        value={corSecundaria}
+                        onChange={(e) => setCorSecundaria(e.target.value)}
+                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={corSecundaria}
+                      onChange={(e) => setCorSecundaria(e.target.value)}
+                      className="w-full bg-gray-light/40 border border-gray-light px-2 py-1.5 text-[10px] rounded-sm font-mono text-center"
+                      maxLength={7}
+                    />
+                  </div>
+
+                  {/* Cor de Fundo */}
+                  <div className="space-y-2">
+                    <label htmlFor="cfg-cor-bg" className="block text-gray-medium uppercase font-bold text-[10px]">Cor de Fundo</label>
+                    <div
+                      className="w-full h-16 rounded-sm border border-gray-light cursor-pointer relative overflow-hidden"
+                      style={{ backgroundColor: corBg }}
+                      onClick={() => document.getElementById('cfg-cor-bg')?.click()}
+                    >
+                      <input
+                        id="cfg-cor-bg"
+                        type="color"
+                        value={corBg}
+                        onChange={(e) => setCorBg(e.target.value)}
+                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={corBg}
+                      onChange={(e) => setCorBg(e.target.value)}
+                      className="w-full bg-gray-light/40 border border-gray-light px-2 py-1.5 text-[10px] rounded-sm font-mono text-center"
+                      maxLength={7}
+                    />
+                  </div>
+                </div>
+
+                {/* Prévia das cores */}
+                <div className="mt-5 p-4 rounded-sm border border-gray-light space-y-1" style={{ backgroundColor: corBg }}>
+                  <p className="text-[9px] font-mono font-bold text-gray-medium uppercase tracking-widest mb-2">Prévia</p>
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1.5 text-[10px] font-bold font-mono rounded-sm" style={{ backgroundColor: corPrimaria, color: '#fff' }}>Primária</span>
+                    <span className="px-3 py-1.5 text-[10px] font-bold font-mono rounded-sm" style={{ backgroundColor: corSecundaria, color: corPrimaria }}>Secundária</span>
+                    <span className="text-[10px] font-mono" style={{ color: corPrimaria }}>Texto de exemplo</span>
+                  </div>
+                </div>
               </div>
-            )}
 
-            <form onSubmit={handleSaveConfig} className="space-y-5 font-mono text-xs text-primary">
-              {/* Telefone */}
-              <div className="space-y-1.5">
-                <label htmlFor="cfg-telefone" className="block text-gray-medium uppercase font-bold">Telefone</label>
-                <input
-                  id="cfg-telefone"
-                  type="text"
-                  placeholder="+55 (11) 90000-0000"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                  className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
-                />
+              {/* Identidade Visual (Logo + Banner) */}
+              <div className="bg-white border border-gray-light rounded-sm shadow-sm p-6 sm:p-8 space-y-6">
+                <h3 className="font-sans text-sm font-bold text-primary tracking-tight uppercase border-b border-gray-light pb-4">
+                  Identidade Visual
+                </h3>
+
+                {/* Logo */}
+                <div className="space-y-3 font-mono text-xs">
+                  <p className="text-[10px] font-mono font-bold text-gray-medium uppercase">Logo da Empresa</p>
+                  <div className="flex items-start gap-4">
+                    <div className="w-24 h-24 rounded-sm border border-gray-light bg-gray-light/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <img
+                        src={logoPreview || logoUrl || '/sem-imagem.png'}
+                        alt="Logo"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <label
+                        htmlFor="upload-logo"
+                        className="flex items-center gap-2 cursor-pointer border border-dashed border-gray-light hover:border-primary px-4 py-3 rounded-sm transition-colors text-[10px] font-mono font-bold text-gray-medium hover:text-primary uppercase tracking-wide"
+                      >
+                        <Upload size={14} />
+                        {logoFile ? logoFile.name : 'Escolher imagem de logo'}
+                      </label>
+                      <input
+                        id="upload-logo"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) { setLogoFile(file); setLogoPreview(URL.createObjectURL(file)); }
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleUploadLogo}
+                          disabled={!logoFile || uploadingLogo}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white font-mono text-[10px] font-bold uppercase tracking-wide py-2 rounded-sm hover:bg-secondary hover:text-primary transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {uploadingLogo ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Upload size={12} />}
+                          Salvar Logo
+                        </button>
+                        {logoUrl && (
+                          <button type="button" onClick={handleRemoveLogo}
+                            className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 hover:bg-red-50 font-mono text-[10px] font-bold uppercase tracking-wide rounded-sm transition-all cursor-pointer"
+                          >
+                            <Trash size={12} /> Remover
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Banner */}
+                <div className="space-y-3 font-mono text-xs border-t border-gray-light pt-5">
+                  <p className="text-[10px] font-mono font-bold text-gray-medium uppercase">Banner da Página Inicial</p>
+                  <div className="w-full h-36 rounded-sm border border-gray-light bg-gray-light/20 overflow-hidden">
+                    <img
+                      src={bannerPreview || bannerUrl || '/sem-imagem.png'}
+                      alt="Banner"
+                      className="w-full h-full object-cover object-center"
+                    />
+                  </div>
+                  <label
+                    htmlFor="upload-banner"
+                    className="flex items-center gap-2 cursor-pointer border border-dashed border-gray-light hover:border-primary px-4 py-3 rounded-sm transition-colors text-[10px] font-mono font-bold text-gray-medium hover:text-primary uppercase tracking-wide"
+                  >
+                    <ImageIcon size={14} />
+                    {bannerFile ? bannerFile.name : 'Escolher imagem de banner'}
+                  </label>
+                  <input
+                    id="upload-banner"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) { setBannerFile(file); setBannerPreview(URL.createObjectURL(file)); }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleUploadBanner}
+                      disabled={!bannerFile || uploadingBanner}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white font-mono text-[10px] font-bold uppercase tracking-wide py-2 rounded-sm hover:bg-secondary hover:text-primary transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {uploadingBanner ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Upload size={12} />}
+                      Salvar Banner
+                    </button>
+                    {bannerUrl && (
+                      <button type="button" onClick={handleRemoveBanner}
+                        className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 hover:bg-red-50 font-mono text-[10px] font-bold uppercase tracking-wide rounded-sm transition-all cursor-pointer"
+                      >
+                        <Trash size={12} /> Remover
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* WhatsApp */}
-              <div className="space-y-1.5">
-                <label htmlFor="cfg-whatsapp" className="block text-gray-medium uppercase font-bold">WhatsApp</label>
-                <input
-                  id="cfg-whatsapp"
-                  type="text"
-                  placeholder="+55 (11) 90000-0000"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
-                />
-              </div>
+            </div>
+            {/* ── Fim Coluna Direita ──────────────────────────────────────── */}
 
-              {/* Instagram */}
-              <div className="space-y-1.5">
-                <label htmlFor="cfg-instagram" className="block text-gray-medium uppercase font-bold">Instagram</label>
-                <input
-                  id="cfg-instagram"
-                  type="text"
-                  placeholder="@canhotosurf"
-                  value={instagram}
-                  onChange={(e) => setInstagram(e.target.value)}
-                  className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
-                />
-              </div>
-
-              {/* E-mail */}
-              <div className="space-y-1.5">
-                <label htmlFor="cfg-email" className="block text-gray-medium uppercase font-bold">E-mail</label>
-                <input
-                  id="cfg-email"
-                  type="email"
-                  placeholder="contato@canhotosurf.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm"
-                />
-              </div>
-
-              {/* Endereço */}
-              <div className="space-y-1.5">
-                <label htmlFor="cfg-endereco" className="block text-gray-medium uppercase font-bold">Endereço</label>
-                <textarea
-                  id="cfg-endereco"
-                  rows={3}
-                  placeholder="Rua, Número, Bairro - Cidade, Estado"
-                  value={endereco}
-                  onChange={(e) => setEndereco(e.target.value)}
-                  className="w-full bg-gray-light/40 border border-gray-light focus:border-primary focus:bg-white focus:outline-none px-4 py-2.5 rounded-sm resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={salvandoConfig}
-                className="w-full bg-primary hover:bg-secondary text-white hover:text-primary font-mono text-[10px] font-bold tracking-widest uppercase py-3.5 transition-all duration-300 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {salvandoConfig ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                    Salvando Configurações...
-                  </>
-                ) : (
-                  'Salvar Configurações'
-                )}
-              </button>
-            </form>
           </div>
         )}
 

@@ -1,34 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
+import { useStore } from '../../context/StoreContext';
 import { Trash2, ShoppingBag, ArrowLeft, ChevronRight } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+
 
 export const Cart: React.FC = () => {
   const { items, totalItems, removeItem, updateQuantity, clearCart } = useCart();
+  const { storeInfo } = useStore();
   const [whatsappSent, setWhatsappSent] = useState(false);
   const [storeWhatsapp, setStoreWhatsapp] = useState('');
 
-  // Fetch store configs for whatsapp number
+  // Set whatsapp number from store configurations context
   useEffect(() => {
-    const fetchLojaInfo = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('loja')
-          .select('whatsapp')
-          .limit(1);
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          setStoreWhatsapp(data[0].whatsapp || '');
-        }
-      } catch (err) {
-        console.error('Erro ao buscar whatsapp da loja no carrinho:', err);
-      }
-    };
-    fetchLojaInfo();
-  }, []);
+    if (storeInfo) {
+      setStoreWhatsapp(storeInfo.whatsapp || '');
+    }
+  }, [storeInfo]);
 
   // ── Calculations ─────────────────────────────────────────────────────────
   const subtotal = items.reduce((s, i) => s + i.preco * i.quantidade, 0);
@@ -75,7 +63,7 @@ export const Cart: React.FC = () => {
           </p>
         </div>
         <Link
-          to="/produtos"
+          to={`/loja/${storeInfo?.slug || ''}/produtos`}
           className="mt-2 bg-primary hover:bg-secondary text-white hover:text-primary font-mono text-[10px] font-bold tracking-widest uppercase py-3.5 px-10 transition-all duration-300"
         >
           Explorar Produtos
@@ -110,10 +98,10 @@ export const Cart: React.FC = () => {
               className="flex gap-4 sm:gap-6 bg-white border border-gray-light p-4 sm:p-6 rounded-sm hover:shadow-sm transition-shadow duration-200"
             >
               {/* Image */}
-              <Link to={`/produtos/${item.id}`} className="flex-shrink-0">
+              <Link to={`/loja/${storeInfo?.slug || ''}/produtos/${item.id}`} className="flex-shrink-0">
                 <div className="w-20 h-24 sm:w-24 sm:h-28 overflow-hidden bg-gray-light rounded-sm">
                   <img
-                    src={item.imagem || 'https://placehold.co/96x112/f5f5f5/999?text=Sem+foto'}
+                    src={item.imagem || '/sem-imagem.png'}
                     alt={item.nome}
                     className="w-full h-full object-cover object-center hover:scale-105 transition-transform duration-300"
                   />
@@ -123,7 +111,7 @@ export const Cart: React.FC = () => {
               {/* Info */}
               <div className="flex flex-col flex-grow min-w-0 gap-1">
                 <Link
-                  to={`/produtos/${item.id}`}
+                  to={`/loja/${storeInfo?.slug || ''}/produtos/${item.id}`}
                   className="font-sans text-sm sm:text-base font-bold text-primary uppercase tracking-tight hover:text-secondary transition-colors truncate"
                 >
                   {item.nome}
@@ -188,7 +176,7 @@ export const Cart: React.FC = () => {
 
           {/* Keep shopping */}
           <Link
-            to="/produtos"
+            to={`/loja/${storeInfo?.slug || ''}/produtos`}
             className="inline-flex items-center gap-2 font-mono text-[10px] font-bold text-gray-medium hover:text-primary uppercase tracking-widest transition-colors mt-2"
           >
             <ArrowLeft size={12} />
@@ -268,7 +256,7 @@ export const Cart: React.FC = () => {
                 <span>Confirmação imediata do pedido</span>
               </div>
               <Link
-                to="/contato"
+                to={`/loja/${storeInfo?.slug || ''}/contato`}
                 className="flex items-center gap-1 font-mono text-[9px] text-secondary hover:text-primary transition-colors uppercase tracking-wider"
               >
                 Ver todos os canais de contato <ChevronRight size={10} />

@@ -16,9 +16,11 @@ import {
   Star,
   Eye,
   EyeOff,
+  Shirt,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { uploadImage } from '../../lib/cloudinary';
+import { uploadImage, deleteImage, extractPublicIdFromUrl } from '../../services/media';
+import { useAuth } from '../../hooks/useAuth';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const AVAILABLE_SIZES = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'Único'];
@@ -51,11 +53,16 @@ const AdminSidebar: React.FC<{ isOpen: boolean; onClose: () => void; activeTab: 
       <div className="space-y-8">
         {/* Brand */}
         <div>
-          <div className="flex flex-col items-start gap-2">
-            <img src="/logo-black.png" alt="Canhoto Surf" className="h-10 w-auto object-contain" />
-            <span className="font-mono text-[9px] text-gray-medium uppercase tracking-wider">
-              Painel Administrativo
-            </span>
+          <div className="flex flex-col items-start gap-1">
+            <div className="flex items-center gap-2 select-none">
+              <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center shadow-md">
+                <Shirt className="h-4 w-4 text-primary stroke-[2.5]" />
+              </div>
+              <span className="font-sans font-extrabold text-base tracking-tight text-primary">
+                sualoj<span className="text-secondary">4</span>
+              </span>
+            </div>
+            <span className="font-mono text-[8px] text-gray-medium uppercase tracking-wider">Painel Administrativo</span>
           </div>
         </div>
         {/* Navigation */}
@@ -152,6 +159,7 @@ export const AddProduct: React.FC = () => {
   const [preco, setPreco] = useState('');
   const [destaque, setDestaque] = useState(false);
   const [ativo, setAtivo] = useState(true);
+  const [lojaId, setLojaId] = useState<string | null>(null);
 
   // ── Estoque state ───────────────────────────────────────────────────────
   const [estoqueEntries, setEstoqueEntries] = useState<EstoqueEntry[]>([]);
@@ -162,11 +170,23 @@ export const AddProduct: React.FC = () => {
   const [existingImages, setExistingImages] = useState<ProdutoImagem[]>([]); // loaded from produto_imagens
   const [isDragging, setIsDragging] = useState(false);
   const [mainImageUrl, setMainImageUrl] = useState<string | null>(null); // selected primary image URL
+  const [imagemPublicId, setImagemPublicId] = useState<string | null>(null);
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // ── lojaId from auth context (multi-tenant) ───────────────────────────────
+  const { lojaId: authLojaId } = useAuth();
+
+  // When creating a new product, use the lojaId from auth context.
+  // When editing, the product's loja_id is loaded below from the product data.
+  useEffect(() => {
+    if (authLojaId && !id) {
+      setLojaId(authLojaId);
+    }
+  }, [authLojaId, id]);
 
   // ── Load data when editing ────────────────────────────────────────────────
   useEffect(() => {
@@ -174,23 +194,19 @@ export const AddProduct: React.FC = () => {
     const fetchProductData = async () => {
       try {
         // Load existing images for editing
-    if (id) {
-      const { data: imgData, error: imgError } = await supabase
-        .from('produto_imagens')
-        .select('id, url')
-        .eq('produto_id', id);
-      if (imgError) throw imgError;
-      if (imgData) {
-        setExistingImages(imgData);
-        // Set primary image to product's current imagem if not already set
-        if (!mainImageUrl && imgData.length > 0) setMainImageUrl(imgData[0].url);
-      }
-    }
+        const { data: imgData, error: imgError } = await supabase
+          .from('produto_imagens')
+          .select('id, url')
+          .eq('produto_id', id);
+        if (imgError) throw imgError;
+        if (imgData) {
+          setExistingImages(imgData);
+        }
 
         // Fetch product data
         const { data: prodData, error: prodError } = await supabase
           .from('produtos')
-          .select('nome, descricao, preco, destaque, ativo, imagem')
+          .select('nome, descricao, preco, destaque, ativo, imagem, imagem_public_id, loja_id')
           .eq('id', id)
           .single();
         if (prodError) throw prodError;
@@ -201,8 +217,14 @@ export const AddProduct: React.FC = () => {
           setDestaque(!!prodData.destaque);
           setAtivo(!!prodData.ativo);
           if (prodData.imagem) setMainImageUrl(prodData.imagem);
+          if (prodData.imagem_public_id) setImagemPublicId(prodData.imagem_public_id);
+          if (prodData.loja_id) setLojaId(prodData.loja_id);
         }
-        const { data: estData, error: estError } = await supabase.from('estoque').select('tamanho, quantidade').eq('produto_id', id);
+        
+        const { data: estData, error: estError } = await supabase
+          .from('estoque')
+          .select('tamanho, quantidade')
+          .eq('produto_id', id);
         if (estError) throw estError;
         if (estData) setEstoqueEntries(estData);
       } catch (err: any) {
@@ -274,26 +296,72 @@ export const AddProduct: React.FC = () => {
     setToast(null);
     try {
       // Upload new images if any
-      let uploadedUrls: string[] = [];
+      let uploadedMedia: { url: string; publicId: string }[] = [];
       if (newImageFiles.length > 0) {
-        const uploadPromises = newImageFiles.map((file) => uploadImage(file));
-        uploadedUrls = await Promise.all(uploadPromises);
+        const currentLojaId = lojaId || 'default';
+        const uploadPromises = newImageFiles.map((file) => uploadImage(file, currentLojaId));
+        uploadedMedia = await Promise.all(uploadPromises);
       }
 
-      // Determine final main image URL
-      const finalMainUrl = mainImageUrl || uploadedUrls[0] || (existingImages.length > 0 ? existingImages[0].url : null);
+      // Determine final main image URL and its public_id
+      let finalMainUrl = mainImageUrl;
+      let finalMainPublicId = imagemPublicId;
+
+      // Se a URL da imagem principal selecionada for um DataURL/Blob (nova imagem)
+      if (finalMainUrl && (finalMainUrl.startsWith('data:') || finalMainUrl.startsWith('blob:'))) {
+        const newImgIdx = previewUrls.indexOf(finalMainUrl);
+        if (newImgIdx !== -1 && uploadedMedia[newImgIdx]) {
+          finalMainUrl = uploadedMedia[newImgIdx].url;
+          finalMainPublicId = uploadedMedia[newImgIdx].publicId;
+        }
+      }
+
+      // Se nenhuma imagem foi explicitamente definida como principal, tenta usar a primeira nova mídia
+      if (!finalMainUrl && uploadedMedia.length > 0) {
+        finalMainUrl = uploadedMedia[0].url;
+        finalMainPublicId = uploadedMedia[0].publicId;
+      } else if (!finalMainUrl && existingImages.length > 0) {
+        // Se não houver novas mídias, pega a primeira das existentes
+        finalMainUrl = existingImages[0].url;
+        finalMainPublicId = extractPublicIdFromUrl(finalMainUrl);
+      }
+
+      // Fallback para extrair publicId a partir da URL se estiver ausente
+      if (finalMainUrl && !finalMainPublicId) {
+        finalMainPublicId = extractPublicIdFromUrl(finalMainUrl);
+      }
+
+      // Se for edição e a imagem principal mudou, deleta a antiga do Cloudinary
+      if (id && imagemPublicId && finalMainPublicId !== imagemPublicId) {
+        try {
+          await deleteImage(imagemPublicId);
+        } catch (mediaErr) {
+          console.error('Erro ao deletar imagem principal antiga do Cloudinary:', mediaErr);
+        }
+      }
+
+      const productPayload = {
+        nome: nome.trim(),
+        descricao: descricao.trim() || null,
+        preco: parseFloat(preco) || 0,
+        destaque,
+        ativo,
+        imagem: finalMainUrl,
+        imagem_public_id: finalMainPublicId,
+        loja_id: lojaId
+      };
 
       if (id) {
         // Update product
         const { error: produtoError } = await supabase
           .from('produtos')
-          .update({ nome: nome.trim(), descricao: descricao.trim() || null, preco: parseFloat(preco) || 0, destaque, ativo, imagem: finalMainUrl })
+          .update(productPayload)
           .eq('id', id);
         if (produtoError) throw produtoError;
         
         // Insert new images
-        if (uploadedUrls.length > 0) {
-          const newImgRows = uploadedUrls.map((url) => ({ produto_id: id, url }));
+        if (uploadedMedia.length > 0) {
+          const newImgRows = uploadedMedia.map((m) => ({ produto_id: id, url: m.url }));
           const { error: imgInsertError } = await supabase.from('produto_imagens').insert(newImgRows);
           if (imgInsertError) throw imgInsertError;
         }
@@ -311,7 +379,7 @@ export const AddProduct: React.FC = () => {
         // Insert new product
         const { data: prod, error: prodError } = await supabase
           .from('produtos')
-          .insert({ nome: nome.trim(), descricao: descricao.trim() || null, preco: parseFloat(preco) || 0, destaque, ativo, imagem: finalMainUrl, created_at: new Date().toISOString() })
+          .insert({ ...productPayload, created_at: new Date().toISOString() })
           .select('id')
           .single();
         if (prodError) throw prodError;
@@ -324,8 +392,8 @@ export const AddProduct: React.FC = () => {
           if (estErr) throw estErr;
         }
         // Insert images
-        if (uploadedUrls.length > 0) {
-          const imgRows = uploadedUrls.map((url) => ({ produto_id: newId, url }));
+        if (uploadedMedia.length > 0) {
+          const imgRows = uploadedMedia.map((m) => ({ produto_id: newId, url: m.url }));
           const { error: imgErr } = await supabase.from('produto_imagens').insert(imgRows);
           if (imgErr) throw imgErr;
         }
@@ -499,6 +567,14 @@ export const AddProduct: React.FC = () => {
                       <div key={img.id} className="relative group">
                         <img src={img.url} alt="existing" className="w-full h-24 object-cover rounded" />
                         <button type="button" onClick={async () => {
+                          const pubId = extractPublicIdFromUrl(img.url);
+                          if (pubId) {
+                            try {
+                              await deleteImage(pubId);
+                            } catch (mediaErr) {
+                              console.error('Erro ao deletar imagem secundária do Cloudinary:', mediaErr);
+                            }
+                          }
                           const { error } = await supabase.from('produto_imagens').delete().eq('id', img.id);
                           if (!error) setExistingImages((prev) => prev.filter((i) => i.id !== img.id));
                         }} className="absolute top-1 right-1 bg-white rounded-full p-0.5 hover:bg-red-100">

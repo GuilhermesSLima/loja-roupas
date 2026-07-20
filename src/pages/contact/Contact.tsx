@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import React from 'react';
+import { useStore } from '../../context/StoreContext';
 
 // ─── ContactCard ─────────────────────────────────────────────────────────────
 interface ContactCardProps {
@@ -62,56 +62,9 @@ const ContactCard: React.FC<ContactCardProps> = ({ title, detail, href, icon }) 
 
 // ─── Contact Page ─────────────────────────────────────────────────────────────
 export const Contact: React.FC = () => {
-  const [lojaInfo, setLojaInfo] = useState<{
-    telefone: string;
-    whatsapp: string;
-    instagram: string;
-    email: string;
-    endereco: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLojaInfo = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('loja')
-          .select('telefone, whatsapp, instagram, email, endereco')
-          .limit(1);
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          setLojaInfo(data[0]);
-        } else {
-          setLojaInfo({
-            telefone: '+55 (11) 99999-9999',
-            whatsapp: '+55 (11) 99999-9999',
-            instagram: '@canhotosurf',
-            email: 'contato@canhotosurf.com',
-            endereco: 'Av. Paulista, 1000 - São Paulo, SP',
-          });
-        }
-      } catch (err) {
-        console.error('Erro ao buscar dados de contato da loja:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLojaInfo();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex-grow flex flex-col items-center justify-center py-20 gap-3">
-        <div className="w-6 h-6 border-2 border-gray-light border-t-primary rounded-full animate-spin" />
-        <p className="font-mono text-[10px] text-gray-medium uppercase tracking-widest">
-          Carregando informações...
-        </p>
-      </div>
-    );
-  }
+  const { storeInfo } = useStore();
+  // Use store configurations from context
+  const lojaInfo = storeInfo;
 
   const cleanNumber = (num: string) => num.replace(/\D/g, '');
 

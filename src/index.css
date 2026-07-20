@@ -6,9 +6,9 @@
   --font-sans: 'Hanken Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   
-  --color-primary: #111111;
-  --color-secondary: #F5C518;
-  --color-bg-white: #FFFFFF;
+  --color-primary: var(--store-primary, #111111);
+  --color-secondary: var(--store-secondary, #F5C518);
+  --color-bg-white: var(--store-bg, #FFFFFF);
   --color-gray-light: #F5F5F5;
   --color-gray-medium: #7A7A7A;
 }

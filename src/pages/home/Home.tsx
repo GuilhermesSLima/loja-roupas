@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { Hero } from '../../components/Hero';
 import { supabase } from '../../lib/supabase';
-
-
+import { useStore } from '../../context/StoreContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Destaque {
@@ -20,15 +19,15 @@ interface HomeProps {
 }
 
 // ─── Carousel Card ────────────────────────────────────────────────────────────
-const FeaturedCard: React.FC<{ produto: Destaque }> = ({ produto }) => (
+const FeaturedCard: React.FC<{ produto: Destaque; baseRoute: string }> = ({ produto, baseRoute }) => (
   <Link
-    to={`/produtos/${produto.id}`}
+    to={`${baseRoute}/produtos/${produto.id}`}
     className="group flex-shrink-0 w-[260px] sm:w-[300px] md:w-[340px] flex flex-col"
   >
     {/* Image */}
     <div className="relative aspect-[3/4] overflow-hidden bg-gray-light rounded-sm">
       <img
-        src={produto.imagem || 'https://placehold.co/340x453/f5f5f5/999?text=Sem+Imagem'}
+        src={produto.imagem || '/sem-imagem.png'}
         alt={produto.nome}
         className="w-full h-full object-cover object-center group-hover:scale-[1.04] transition-transform duration-700 ease-out"
         loading="lazy"
@@ -64,6 +63,7 @@ const FeaturedCard: React.FC<{ produto: Destaque }> = ({ produto }) => (
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export const Home: React.FC<HomeProps> = () => {
+  const { lojaId, storeInfo } = useStore();
   const [destaques, setDestaques] = useState<Destaque[]>([]);
   const [loadingDestaques, setLoadingDestaques] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -71,16 +71,20 @@ export const Home: React.FC<HomeProps> = () => {
   const trackRef = useRef<HTMLDivElement>(null);
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const baseRoute = `/loja/${storeInfo?.slug || ''}`;
 
   // ── Fetch random products for "Nossos produtos" grid ────────────────────────────────────────
   useEffect(() => {
+    if (!lojaId) return;
+
     const fetchRandomProducts = async () => {
       try {
-        // PostgREST não suporta ORDER BY random() — buscamos tudo e embaralhamos no cliente
         const { data, error } = await supabase
           .from('produtos')
           .select('id, nome, preco, imagem, descricao')
-          .eq('ativo', true);
+          .eq('ativo', true)
+          .eq('loja_id', lojaId);
+
         if (error) throw error;
         const all = data || [];
         // Fisher-Yates shuffle
@@ -94,29 +98,32 @@ export const Home: React.FC<HomeProps> = () => {
       }
     };
     fetchRandomProducts();
-  }, []);
+  }, [lojaId]);
 
-useEffect(() => {
-  const fetchDestaques = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('produtos')
-        .select('id, nome, preco, imagem, descricao')
-        .eq('destaque', true)
-        .eq('ativo', true)
-        .order('created_at', { ascending: false });
+  useEffect(() => {
+    if (!lojaId) return;
 
-      if (error) throw error;
-      setDestaques(data || []);
-    } catch (err) {
-      console.error('Erro ao carregar destaques:', err);
-    } finally {
-      setLoadingDestaques(false);
-    }
-  };
+    const fetchDestaques = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('id, nome, preco, imagem, descricao')
+          .eq('destaque', true)
+          .eq('ativo', true)
+          .eq('loja_id', lojaId)
+          .order('created_at', { ascending: false });
 
-  fetchDestaques();
-}, []);
+        if (error) throw error;
+        setDestaques(data || []);
+      } catch (err) {
+        console.error('Erro ao carregar destaques:', err);
+      } finally {
+        setLoadingDestaques(false);
+      }
+    };
+
+    fetchDestaques();
+  }, [lojaId]);
 
   // ── Carousel: visible cards count ────────────────────────────────────────
   const getVisibleCount = () => {
@@ -158,7 +165,6 @@ useEffect(() => {
   };
 
   // ── Card width calc (must match CSS) ─────────────────────────────────────
-  // card width + gap: sm=300+24, md=340+24, default=260+16
   const getCardWidthPx = () => {
     if (typeof window === 'undefined') return 324;
     if (window.innerWidth >= 768) return 364; // 340 + 24
@@ -170,16 +176,12 @@ useEffect(() => {
 
   return (
     <main className="flex-grow">
-
       {/* 1. Hero Banner */}
       <Hero />
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* 2. DESTAQUES CAROUSEL                                               */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* 2. DESTAQUES CAROUSEL */}
       <section className="py-16 md:py-24 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
             <div>
@@ -214,7 +216,7 @@ useEffect(() => {
               )}
 
               <Link
-                to="/produtos"
+                to={`${baseRoute}/produtos`}
                 className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-gray-medium hover:text-primary transition-colors uppercase tracking-widest group"
               >
                 Ver todos
@@ -245,7 +247,7 @@ useEffect(() => {
                 style={{ transform: `translateX(-${translateX}px)` }}
               >
                 {destaques.map((p) => (
-                  <FeaturedCard key={p.id} produto={p} />
+                  <FeaturedCard key={p.id} produto={p} baseRoute={baseRoute} />
                 ))}
               </div>
 
@@ -270,9 +272,7 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* 3. Nossos Produtos Grid                                            */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* 3. Nossos Produtos Grid */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24">
         {/* Header */}
         <div className="flex items-end justify-between mb-6 border-b border-gray-200 pb-4">
@@ -283,7 +283,7 @@ useEffect(() => {
             <div className="w-8 h-[3px] bg-primary mt-2" />
           </div>
           <Link
-            to="/produtos"
+            to={`${baseRoute}/produtos`}
             className="font-mono text-[10px] font-bold tracking-[0.2em] text-secondary hover:text-primary uppercase transition-colors flex items-center gap-1 group"
           >
             Ver todos os produtos
@@ -293,11 +293,11 @@ useEffect(() => {
 
         {/* Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Left: large card (first random product) */}
+          {/* Left: large card */}
           {randomProducts.length > 0 && (
             <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[480px] lg:h-[600px]">
               <img
-                src={randomProducts[0].imagem}
+                src={randomProducts[0].imagem || '/sem-imagem.png'}
                 alt={randomProducts[0].nome}
                 className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                 loading="lazy"
@@ -307,7 +307,7 @@ useEffect(() => {
                 <span className="block font-mono text-[9px] font-bold tracking-[0.3em] text-secondary uppercase">
                   {randomProducts[0].nome}
                 </span>
-                <Link to={`/produtos/${randomProducts[0].id}`}>
+                <Link to={`${baseRoute}/produtos/${randomProducts[0].id}`}>
                   <button className="bg-white text-primary font-mono text-xs font-bold px-5 py-2.5 rounded hover:bg-secondary transition-colors tracking-wide cursor-pointer">
                     Ver produto
                   </button>
@@ -316,13 +316,13 @@ useEffect(() => {
             </div>
           )}
 
-          {/* Right: stacked smaller cards (next three random products) */}
+          {/* Right: stacked smaller cards */}
           <div className="flex flex-col gap-4">
             {/* Top right: wide card */}
             {randomProducts[1] && (
               <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[200px] lg:h-[240px]">
                 <img
-                  src={randomProducts[1].imagem}
+                  src={randomProducts[1].imagem || '/sem-imagem.png'}
                   alt={randomProducts[1].nome}
                   className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                   loading="lazy"
@@ -340,7 +340,7 @@ useEffect(() => {
               {randomProducts[2] && (
                 <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
                   <img
-                    src={randomProducts[2].imagem}
+                    src={randomProducts[2].imagem || '/sem-imagem.png'}
                     alt={randomProducts[2].nome}
                     className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                     loading="lazy"
@@ -356,7 +356,7 @@ useEffect(() => {
               {randomProducts[3] && (
                 <div className="relative overflow-hidden rounded-xl group cursor-pointer h-[180px] lg:h-[220px]">
                   <img
-                    src={randomProducts[3].imagem}
+                    src={randomProducts[3].imagem || '/sem-imagem.png'}
                     alt={randomProducts[3].nome}
                     className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                     loading="lazy"

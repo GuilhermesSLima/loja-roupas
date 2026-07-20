@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { session, loading } = useAuth();
+  const { session, lojaId, loading } = useAuth();
 
   // While checking auth state, show a minimal loading screen
   if (loading) {
@@ -23,8 +23,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  // If no session, redirect to login
-  if (!session) {
+  // If no session or no lojaId associated, redirect to login
+  if (!session || !lojaId) {
     return <Navigate to="/admin/login" replace />;
   }
 

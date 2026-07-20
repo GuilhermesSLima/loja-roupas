@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, ArrowLeft, Shirt } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export const AdminLogin: React.FC = () => {
@@ -16,18 +16,67 @@ export const AdminLogin: React.FC = () => {
     setError(null);
     setLoading(true);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (signInError) {
-      setError('Credenciais inválidas. Verifique seu e-mail e senha e tente novamente.');
+      if (signInError) {
+        setError('Credenciais inválidas. Verifique seu e-mail e senha e tente novamente.');
+        setLoading(false);
+        return;
+      }
+
+      if (data?.user) {
+        // Validação no banco: verificar se existe perfil com loja_id
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('loja_id')
+          .eq('id', data.user.id)
+          .single();
+
+        // Log detalhado para diagnóstico (visível no console do navegador)
+        if (profileError) {
+          console.error('[AdminLogin] Erro ao buscar perfil:', {
+            message: profileError.message,
+            code: profileError.code,
+            details: profileError.details,
+            hint: profileError.hint,
+            userId: data.user.id,
+          });
+        } else {
+          console.log('[AdminLogin] Perfil encontrado:', profile);
+        }
+
+        if (profileError) {
+          // Código PGRST116 = "Results contain 0 rows" (.single() não encontrou registro)
+          if (profileError.code === 'PGRST116') {
+            await supabase.auth.signOut();
+            setError('Acesso recusado: nenhum perfil de administrador encontrado para este usuário.');
+          } else {
+            // Pode ser erro de RLS (42501) ou outro erro de banco
+            await supabase.auth.signOut();
+            setError(`Erro ao verificar perfil de acesso (${profileError.code}). Verifique as permissões RLS da tabela "profiles" no Supabase.`);
+          }
+          setLoading(false);
+          return;
+        }
+
+        if (!profile?.loja_id) {
+          await supabase.auth.signOut();
+          setError('Acesso recusado: este perfil não possui nenhuma loja vinculada.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      navigate('/admin');
+    } catch (err) {
+      console.error('Erro na autenticação de admin:', err);
+      setError('Ocorreu um erro ao processar o login. Tente novamente.');
       setLoading(false);
-      return;
     }
-
-    navigate('/admin');
   };
 
   return (
@@ -38,8 +87,15 @@ export const AdminLogin: React.FC = () => {
 
         {/* Cabeçalho da marca */}
         <div className="text-center mb-8 flex flex-col items-center">
-          <img src="/logo-black.png" alt="Canhoto Surf Outlet" className="h-28 w-auto object-contain mb-4" />
-          <p className="font-mono text-[11px] tracking-[0.35em] text-gray-medium uppercase">
+          <div className="flex items-center gap-3 mb-4 select-none">
+            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-md">
+              <Shirt className="h-6 w-6 text-white stroke-[2.5]" />
+            </div>
+            <span className="font-sans font-black text-2xl tracking-tight text-primary">
+              sualoj<span className="text-secondary">4</span>
+            </span>
+          </div>
+          <p className="font-mono text-[10px] tracking-[0.35em] text-gray-medium uppercase">
             ADMINISTRAÇÃO INTERNA
           </p>
         </div>

@@ -3,9 +3,15 @@ import { NavLink, Link } from 'react-router-dom';
 import { ShoppingBag } from 'lucide-react';
 import { Badge } from './Badge';
 import { useCart } from '../context/CartContext';
+import { useStore } from '../context/StoreContext';
 
 export const Navbar: React.FC = () => {
   const { totalItems } = useCart();
+  const { storeInfo } = useStore();
+
+  if (!storeInfo) return null;
+
+  const baseRoute = `/loja/${storeInfo.slug}`;
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-gray-light">
@@ -13,15 +19,21 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center justify-between h-20">
           
           <div className="flex-shrink-0 flex items-center">
-            <Link to="/" className="flex items-center">
-              <img src="/logo-black.png" alt="Canhoto Surf Outlet" className="h-14 w-auto object-contain" />
+            <Link to={baseRoute} className="flex items-center">
+              {storeInfo.logo ? (
+                <img src={storeInfo.logo} alt={storeInfo.nome} className="h-14 w-auto object-contain" />
+              ) : (
+                <span className="font-sans font-black text-xl tracking-tight text-primary uppercase">
+                  {storeInfo.nome}
+                </span>
+              )}
             </Link>
           </div>
 
           {/* Navigation Menu */}
           <nav className="hidden md:flex space-x-8 font-sans font-medium text-sm uppercase tracking-wider items-center">
             <NavLink 
-              to="/" 
+              to={baseRoute} 
               end
               className={({ isActive }) => 
                 isActive 
@@ -32,7 +44,7 @@ export const Navbar: React.FC = () => {
               Home
             </NavLink>
             <NavLink 
-              to="/produtos" 
+              to={`${baseRoute}/produtos`} 
               className={({ isActive }) => 
                 isActive 
                   ? "text-primary border-b-2 border-secondary pb-1 transition-all duration-200" 
@@ -42,7 +54,7 @@ export const Navbar: React.FC = () => {
               Produtos
             </NavLink>
             <NavLink 
-              to="/contato" 
+              to={`${baseRoute}/contato`} 
               className={({ isActive }) => 
                 isActive 
                   ? "text-primary border-b-2 border-secondary pb-1 transition-all duration-200" 
@@ -56,7 +68,7 @@ export const Navbar: React.FC = () => {
           {/* Cart Icon */}
           <div className="flex items-center">
             <Link
-              to="/carrinho"
+              to={`${baseRoute}/carrinho`}
               title="Carrinho"
               className="relative w-9 h-9 flex items-center justify-center border border-primary bg-primary hover:bg-secondary hover:border-secondary transition-all duration-300 group"
             >
@@ -77,4 +89,3 @@ export const Navbar: React.FC = () => {
     </header>
   );
 };
-
